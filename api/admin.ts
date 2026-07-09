@@ -11,7 +11,7 @@
 // row has role = 'ADMIN' before touching the database. Anyone else gets 403.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { admin, slugify, requireAdmin } from './_lib/supabaseAdmin';
+import { admin, slugify, requireAdmin } from './_lib/supabaseAdmin.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

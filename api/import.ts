@@ -6,7 +6,7 @@
 // paste a CSV or JSON payload in the Admin Panel's Bulk Import tab.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { admin, slugify, requireAdmin } from './_lib/supabaseAdmin';
+import { admin, slugify, requireAdmin } from './_lib/supabaseAdmin.js';
 
 interface ImportRow {
   row: number;
@@ -49,8 +49,7 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
-function normalizeRow(raw: Record<string, any>): { ok: true; data: any } | { ok: false; reason: string } {
-  for (const field of REQUIRED_FIELDS) {
+function normalizeRow(raw: Record<string, any>): { ok: boolean; data?: any; reason?: string } {  for (const field of REQUIRED_FIELDS) {
     if (!raw[field] || String(raw[field]).trim() === '') {
       return { ok: false, reason: `Missing required field "${field}"` };
     }
@@ -124,8 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!normalized.ok) {
       skipped++;
-      details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason });
-      continue;
+details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason ?? 'Invalid row.' });      continue;
     }
 
     const slug = slugify(normalized.data.name);
