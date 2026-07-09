@@ -19,9 +19,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const caller = await requireAdmin(req);
-  if (!caller) {
-    return res.status(403).json({ success: false, message: 'Admin access required.' });
-  }
+if ('error' in caller) {
+  return res.status(403).json({ success: false, message: caller.error });
+}
 
   const { resource, action, id, payload } = req.body ?? {};
 

@@ -21,16 +21,18 @@ export function slugify(text: string): string {
 }
 
 /** Verifies the request's Bearer token belongs to a logged-in user with role = 'ADMIN'. */
-export async function requireAdmin(req: VercelRequest): Promise<{ id: string } | null> {
+export async function requireAdmin(req: VercelRequest): Promise<{ id: string } | { error: string }> {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
+  if (!authHeader?.startsWith('Bearer ')) return { error: 'No Authorization header sent.' };
   const token = authHeader.slice('Bearer '.length);
 
   const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return null;
+  if (error) return { error: `Token rejected by Supabase: ${error.message}` };
+  if (!user) return { error: 'Token valid but no user found.' };
 
-  const { data: profile } = await admin.from('Profile').select('role').eq('id', user.id).single();
-  if (profile?.role !== 'ADMIN') return null;
+  const { data: profile, error: profileError } = await admin.from('Profile').select('role').eq('id', user.id).single();
+  if (profileError) return { error: `Could not read Profile row: ${profileError.message}` };
+  if (profile?.role !== 'ADMIN') return { error: `Profile role is "${profile?.role}", not ADMIN.` };
 
   return { id: user.id };
 }
