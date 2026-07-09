@@ -200,8 +200,7 @@ export default function Universities() {
               {Array.from({ length: data.meta.totalPages }).map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => updateFilter('page', String(i + 1))}
-                  className={`h-9 w-9 rounded-lg text-sm font-medium ${data.meta.page === i + 1 ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
+onClick={() => setParams(new URLSearchParams({ ...Object.fromEntries(params), page: String(i + 1) }))}                  className={`h-9 w-9 rounded-lg text-sm font-medium ${data.meta.page === i + 1 ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300'}`}
                 >
                   {i + 1}
                 </button>
