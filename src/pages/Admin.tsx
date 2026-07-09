@@ -1,0 +1,436 @@
+import { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
+import {
+  LayoutDashboard, Building2, GraduationCap, Award, CalendarPlus, UploadCloud,
+  Trash2, Plus, CheckCircle2, XCircle, Users, Star,
+} from 'lucide-react';
+import { adminApi, importApi } from '../lib/functions';
+import { listUniversities, listDegrees } from '../lib/queries';
+import { UniversitySummary, Degree } from '../types';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Button } from '../components/ui/Button';
+import { Badge } from '../components/ui/Badge';
+import { PAKISTAN_PROVINCES } from '../lib/constants';
+
+interface AdminStats {
+  universities: number;
+  degrees: number;
+  scholarships: number;
+  users: number;
+  reviews: number;
+}
+
+const tabs = [
+  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { key: 'universities', label: 'Universities', icon: Building2 },
+  { key: 'import', label: 'Bulk Import', icon: UploadCloud },
+  { key: 'degrees', label: 'Degrees', icon: GraduationCap },
+  { key: 'scholarships', label: 'Scholarships', icon: Award },
+  { key: 'deadlines', label: 'Deadlines', icon: CalendarPlus },
+] as const;
+
+export default function Admin() {
+  const [tab, setTab] = useState<(typeof tabs)[number]['key']>('overview');
+  const queryClient = useQueryClient();
+
+  const { data: stats } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: () => adminApi.stats(),
+  });
+
+  const { data: universities } = useQuery({
+    queryKey: ['universities-admin'],
+    queryFn: async () => (await listUniversities({ pageSize: 50 })).data,
+  });
+
+  const { data: degrees } = useQuery({
+    queryKey: ['degrees-admin'],
+    queryFn: () => listDegrees(),
+  });
+
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+    queryClient.invalidateQueries({ queryKey: ['universities-admin'] });
+    queryClient.invalidateQueries({ queryKey: ['degrees-admin'] });
+  };
+
+  return (
+    <div className="container-page py-10">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Admin Panel</h1>
+        <p className="text-muted mt-1">Manage universities, degrees, scholarships, and the admission calendar.</p>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-8 -mx-1 px-1">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
+              tab === t.key ? 'bg-brand-600 text-white' : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <t.icon className="h-4 w-4" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && stats && (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <StatCard icon={Building2} label="Universities" value={stats.universities} />
+          <StatCard icon={GraduationCap} label="Degrees" value={stats.degrees} />
+          <StatCard icon={Award} label="Scholarships" value={stats.scholarships} />
+          <StatCard icon={Users} label="Users" value={stats.users} />
+          <StatCard icon={Star} label="Reviews" value={stats.reviews} />
+        </div>
+      )}
+
+      {tab === 'universities' && <UniversitiesTab universities={universities} onChanged={refreshAll} />}
+      {tab === 'import' && <ImportTab onChanged={refreshAll} />}
+      {tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} onChanged={refreshAll} />}
+      {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
+      {tab === 'deadlines' && <DeadlinesTab universities={universities} />}
+    </div>
+  );
+}
+
+function StatCard({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
+  return (
+    <Card className="p-5">
+      <div className="h-10 w-10 rounded-xl bg-brand-50 dark:bg-slate-800 flex items-center justify-center mb-3">
+        <Icon className="h-5 w-5 text-brand-600 dark:text-brand-400" />
+      </div>
+      <div className="text-2xl font-bold text-slate-900 dark:text-white">{value}</div>
+      <div className="text-sm text-muted">{label}</div>
+    </Card>
+  );
+}
+
+function FormMessage({ ok, text }: { ok: boolean | null; text: string }) {
+  if (ok === null) return null;
+  return (
+    <p className={`flex items-center gap-1.5 text-sm ${ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+      {ok ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />} {text}
+    </p>
+  );
+}
+
+// ---------------- Universities Tab ----------------
+function UniversitiesTab({ universities, onChanged }: { universities?: UniversitySummary[]; onChanged: () => void }) {
+  const [form, setForm] = useState({ name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', hecRanking: '' });
+  const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await adminApi.createUniversity({ ...form, hecRanking: form.hecRanking ? Number(form.hecRanking) : undefined });
+      setMsg({ ok: true, text: `${form.name} created.` });
+      setForm({ name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', hecRanking: '' });
+      onChanged();
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create.' });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
+    await adminApi.deleteUniversity(id);
+    onChanged();
+  };
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-8">
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add University</h2>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <Input label="Full Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Input label="Short Name" value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} placeholder="e.g. NUST" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select label="Sector" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
+              <option value="PUBLIC">Public</option>
+              <option value="PRIVATE">Private</option>
+              <option value="SEMI_GOVERNMENT">Semi-Government</option>
+            </Select>
+            <Select label="Province" value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })}>
+              {PAKISTAN_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+            </Select>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="City" required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+            <Input label="HEC Ranking" type="number" value={form.hecRanking} onChange={(e) => setForm({ ...form, hecRanking: e.target.value })} />
+          </div>
+          <Input label="Website" type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://" />
+          <FormMessage ok={msg.ok} text={msg.text} />
+          <Button type="submit" className="w-full" isLoading={submitting}>Create University</Button>
+        </form>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Universities ({universities?.length ?? 0})</h2>
+        <div className="space-y-2 max-h-[32rem] overflow-y-auto">
+          {universities?.map((u) => (
+            <div key={u.id} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+              <div>
+                <p className="text-sm font-medium text-slate-900 dark:text-white">{u.name}</p>
+                <p className="text-xs text-muted">{u.city}, {u.province} • <Badge className="ml-1">{u.sector}</Badge></p>
+              </div>
+              <button onClick={() => handleDelete(u.id, u.name)} className="text-slate-400 hover:text-rose-500 transition-colors shrink-0">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------- Bulk Import Tab ----------------
+function ImportTab({ onChanged }: { onChanged: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [jsonText, setJsonText] = useState('{\n  "universities": [\n    { "name": "Example University", "province": "Punjab", "city": "Lahore", "sector": "PUBLIC" }\n  ]\n}');
+  const [csvResult, setCsvResult] = useState<any>(null);
+  const [jsonResult, setJsonResult] = useState<any>(null);
+  const [error, setError] = useState('');
+  const [loadingCsv, setLoadingCsv] = useState(false);
+  const [loadingJson, setLoadingJson] = useState(false);
+
+  const handleCsvImport = async () => {
+    if (!file) return;
+    setLoadingCsv(true);
+    setError('');
+    try {
+      const csvText = await file.text();
+      const result = await importApi.importCsv(csvText);
+      setCsvResult(result);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'CSV import failed.');
+    } finally {
+      setLoadingCsv(false);
+    }
+  };
+
+  const handleJsonImport = async () => {
+    setLoadingJson(true);
+    setError('');
+    try {
+      const parsed = JSON.parse(jsonText);
+      const result = await importApi.importJson(parsed.universities ?? parsed);
+      setJsonResult(result);
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'JSON import failed — check formatting.');
+    } finally {
+      setLoadingJson(false);
+    }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-8">
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> CSV Importer</h2>
+        <p className="text-xs text-muted mb-4">
+          Header row required: <code className="text-[11px]">name,shortName,sector,province,city,website,email,phone,hecRanking,establishedYear,genderPolicy,hasHostel,hostelFeePerYear,description</code>
+        </p>
+        <input
+          type="file"
+          accept=".csv"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-brand-50 dark:file:bg-slate-800 file:text-brand-700 dark:file:text-brand-300 file:text-sm mb-4"
+        />
+        <Button onClick={handleCsvImport} disabled={!file} isLoading={loadingCsv}>Import CSV</Button>
+        {csvResult && (
+          <div className="mt-4 text-sm space-y-1">
+            <p className="text-emerald-600 dark:text-emerald-400">{csvResult.created} created</p>
+            <p className="text-amber-600 dark:text-amber-400">{csvResult.skipped} skipped</p>
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> JSON Importer</h2>
+        <p className="text-xs text-muted mb-4">Paste a JSON object with a <code>universities</code> array.</p>
+        <textarea
+          value={jsonText}
+          onChange={(e) => setJsonText(e.target.value)}
+          rows={10}
+          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-4"
+        />
+        <Button onClick={handleJsonImport} isLoading={loadingJson}>Import JSON</Button>
+        {jsonResult && (
+          <div className="mt-4 text-sm space-y-1">
+            <p className="text-emerald-600 dark:text-emerald-400">{jsonResult.created} created</p>
+            <p className="text-amber-600 dark:text-amber-400">{jsonResult.skipped} skipped</p>
+          </div>
+        )}
+      </Card>
+
+      {error && <p className="text-sm text-rose-500 lg:col-span-2">{error}</p>}
+    </div>
+  );
+}
+
+// ---------------- Degrees Tab ----------------
+function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; onChanged: () => void }) {
+  const [form, setForm] = useState({ title: '', level: 'BACHELORS', durationYears: '4', overview: '' });
+  const [link, setLink] = useState({ universityId: '', degreeId: '', semesterFee: '', lastYearAggregate: '' });
+  const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
+  const [linkMsg, setLinkMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await adminApi.createDegree({ ...form, durationYears: parseFloat(form.durationYears) });
+      setMsg({ ok: true, text: `${form.title} created.` });
+      setForm({ title: '', level: 'BACHELORS', durationYears: '4', overview: '' });
+      onChanged();
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create degree.' });
+    }
+  };
+
+  const handleLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await adminApi.linkDegree({
+        universityId: link.universityId,
+        degreeId: link.degreeId,
+        semesterFee: link.semesterFee ? parseInt(link.semesterFee) : undefined,
+        lastYearAggregate: link.lastYearAggregate ? parseFloat(link.lastYearAggregate) : undefined,
+        entryTestRequired: false,
+      });
+      setLinkMsg({ ok: true, text: 'Program linked to university.' });
+      onChanged();
+    } catch (err) {
+      setLinkMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to link.' });
+    }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-2 gap-8">
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add Degree</h2>
+        <form onSubmit={handleCreate} className="space-y-4">
+          <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. BS Data Science" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Select label="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+              {['ASSOCIATE', 'BACHELORS', 'MASTERS', 'MPHIL', 'PHD', 'DIPLOMA'].map((l) => <option key={l} value={l}>{l}</option>)}
+            </Select>
+            <Input label="Duration (Years)" type="number" step="0.5" value={form.durationYears} onChange={(e) => setForm({ ...form, durationYears: e.target.value })} />
+          </div>
+          <Input label="Overview" value={form.overview} onChange={(e) => setForm({ ...form, overview: e.target.value })} />
+          <FormMessage ok={msg.ok} text={msg.text} />
+          <Button type="submit" className="w-full">Create Degree</Button>
+        </form>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Link Degree to University</h2>
+        <form onSubmit={handleLink} className="space-y-4">
+          <Select label="University" required value={link.universityId} onChange={(e) => setLink({ ...link, universityId: e.target.value })}>
+            <option value="">Select a university</option>
+            {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+          <Select label="Degree" required value={link.degreeId} onChange={(e) => setLink({ ...link, degreeId: e.target.value })}>
+            <option value="">Select a degree</option>
+            {degrees?.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+          </Select>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Semester Fee (Rs.)" type="number" value={link.semesterFee} onChange={(e) => setLink({ ...link, semesterFee: e.target.value })} />
+            <Input label="Last Year Aggregate (%)" type="number" step="0.01" value={link.lastYearAggregate} onChange={(e) => setLink({ ...link, lastYearAggregate: e.target.value })} />
+          </div>
+          <FormMessage ok={linkMsg.ok} text={linkMsg.text} />
+          <Button type="submit" className="w-full">Link Program</Button>
+        </form>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------- Scholarships Tab ----------------
+function ScholarshipsTab({ universities }: { universities?: UniversitySummary[] }) {
+  const [form, setForm] = useState({ name: '', category: 'MERIT', province: '', benefits: '', eligibility: '', deadline: '', officialLink: '' });
+  const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await adminApi.createScholarship({ ...form, province: form.province || undefined, deadline: form.deadline || undefined });
+      setMsg({ ok: true, text: `${form.name} created.` });
+      setForm({ name: '', category: 'MERIT', province: '', benefits: '', eligibility: '', deadline: '', officialLink: '' });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create scholarship.' });
+    }
+  };
+
+  return (
+    <Card className="p-6 sm:p-8 max-w-2xl">
+      <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add Scholarship</h2>
+      <form onSubmit={handleCreate} className="space-y-4">
+        <Input label="Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Select label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+            {['MERIT', 'NEED_BASED', 'PROVINCIAL', 'INTERNATIONAL', 'GOVERNMENT', 'PRIVATE'].map((c) => <option key={c} value={c}>{c}</option>)}
+          </Select>
+          <Select label="Province (optional)" value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })}>
+            <option value="">Nationwide</option>
+            {PAKISTAN_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+          </Select>
+        </div>
+        <Input label="Benefits" value={form.benefits} onChange={(e) => setForm({ ...form, benefits: e.target.value })} />
+        <Input label="Eligibility" value={form.eligibility} onChange={(e) => setForm({ ...form, eligibility: e.target.value })} />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="Deadline" type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+          <Input label="Official Link" type="url" value={form.officialLink} onChange={(e) => setForm({ ...form, officialLink: e.target.value })} placeholder="https://" />
+        </div>
+        <FormMessage ok={msg.ok} text={msg.text} />
+        <Button type="submit" className="w-full">Create Scholarship</Button>
+      </form>
+    </Card>
+  );
+}
+
+// ---------------- Deadlines Tab ----------------
+function DeadlinesTab({ universities }: { universities?: UniversitySummary[] }) {
+  const [form, setForm] = useState({ universityId: '', type: 'ADMISSION_OPEN', title: '', date: '', notes: '' });
+  const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await adminApi.createDeadline(form);
+      setMsg({ ok: true, text: 'Deadline added to the admission calendar.' });
+      setForm({ universityId: '', type: 'ADMISSION_OPEN', title: '', date: '', notes: '' });
+    } catch (err) {
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create deadline.' });
+    }
+  };
+
+  return (
+    <Card className="p-6 sm:p-8 max-w-2xl">
+      <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add Admission Calendar Event</h2>
+      <form onSubmit={handleCreate} className="space-y-4">
+        <Select label="University" required value={form.universityId} onChange={(e) => setForm({ ...form, universityId: e.target.value })}>
+          <option value="">Select a university</option>
+          {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+        </Select>
+        <Select label="Event Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+          {['ADMISSION_OPEN', 'ADMISSION_CLOSE', 'ENTRY_TEST', 'INTERVIEW', 'MERIT_LIST', 'SCHOLARSHIP_DEADLINE', 'CLASSES_START'].map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+        </Select>
+        <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Undergraduate Admissions Open" />
+        <Input label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+        <Input label="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+        <FormMessage ok={msg.ok} text={msg.text} />
+        <Button type="submit" className="w-full">Add to Calendar</Button>
+      </form>
+    </Card>
+  );
+}
