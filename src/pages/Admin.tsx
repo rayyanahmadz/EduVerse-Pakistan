@@ -280,20 +280,56 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
 
 // ---------------- Degrees Tab ----------------
 function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; onChanged: () => void }) {
-  const [form, setForm] = useState({ title: '', level: 'BACHELORS', durationYears: '4', overview: '' });
+  const emptyForm = { title: '', level: 'BACHELORS', durationYears: '4', overview: '', expectedSalaryMin: '', expectedSalaryMax: '' };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [link, setLink] = useState({ universityId: '', degreeId: '', semesterFee: '', lastYearAggregate: '' });
   const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
   const [linkMsg, setLinkMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const startEdit = (d: Degree) => {
+    setEditingId(d.id);
+    setForm({
+      title: d.title,
+      level: d.level,
+      durationYears: String(d.durationYears ?? 4),
+      overview: d.overview ?? '',
+      expectedSalaryMin: d.expectedSalaryMin != null ? String(d.expectedSalaryMin) : '',
+      expectedSalaryMax: d.expectedSalaryMax != null ? String(d.expectedSalaryMax) : '',
+    });
+    setMsg({ ok: null, text: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMsg({ ok: null, text: '' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      title: form.title,
+      level: form.level,
+      durationYears: parseFloat(form.durationYears),
+      overview: form.overview,
+      expectedSalaryMin: form.expectedSalaryMin ? parseInt(form.expectedSalaryMin) : null,
+      expectedSalaryMax: form.expectedSalaryMax ? parseInt(form.expectedSalaryMax) : null,
+    };
     try {
-      await adminApi.createDegree({ ...form, durationYears: parseFloat(form.durationYears) });
-      setMsg({ ok: true, text: `${form.title} created.` });
-      setForm({ title: '', level: 'BACHELORS', durationYears: '4', overview: '' });
+      if (editingId) {
+        await adminApi.updateDegree(editingId, payload);
+        setMsg({ ok: true, text: `${form.title} updated.` });
+        setEditingId(null);
+      } else {
+        await adminApi.createDegree(payload);
+        setMsg({ ok: true, text: `${form.title} created.` });
+      }
+      setForm(emptyForm);
       onChanged();
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create degree.' });
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to save degree.' });
     }
   };
 
@@ -315,41 +351,74 @@ function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; 
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-8">
-      <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add Degree</h2>
-        <form onSubmit={handleCreate} className="space-y-4">
-          <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. BS Data Science" />
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Select label="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
-              {['ASSOCIATE', 'BACHELORS', 'MASTERS', 'MPHIL', 'PHD', 'DIPLOMA'].map((l) => <option key={l} value={l}>{l}</option>)}
+    <div className="space-y-8">
+      <div className="grid lg:grid-cols-2 gap-8">
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4" /> {editingId ? 'Edit Degree' : 'Add Degree'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. BS Data Science" />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Select label="Level" value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })}>
+                {['ASSOCIATE', 'BACHELORS', 'MASTERS', 'MPHIL', 'PHD', 'DIPLOMA'].map((l) => <option key={l} value={l}>{l}</option>)}
+              </Select>
+              <Input label="Duration (Years)" type="number" step="0.5" value={form.durationYears} onChange={(e) => setForm({ ...form, durationYears: e.target.value })} />
+            </div>
+            <Input label="Overview" value={form.overview} onChange={(e) => setForm({ ...form, overview: e.target.value })} />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Expected Salary Min (Rs./mo)" type="number" value={form.expectedSalaryMin} onChange={(e) => setForm({ ...form, expectedSalaryMin: e.target.value })} />
+              <Input label="Expected Salary Max (Rs./mo)" type="number" value={form.expectedSalaryMax} onChange={(e) => setForm({ ...form, expectedSalaryMax: e.target.value })} />
+            </div>
+            <FormMessage ok={msg.ok} text={msg.text} />
+            <div className="flex gap-3">
+              <Button type="submit" className="w-full">{editingId ? 'Update Degree' : 'Create Degree'}</Button>
+              {editingId && <Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button>}
+            </div>
+          </form>
+        </Card>
+
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Link Degree to University</h2>
+          <form onSubmit={handleLink} className="space-y-4">
+            <Select label="University" required value={link.universityId} onChange={(e) => setLink({ ...link, universityId: e.target.value })}>
+              <option value="">Select a university</option>
+              {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </Select>
-            <Input label="Duration (Years)" type="number" step="0.5" value={form.durationYears} onChange={(e) => setForm({ ...form, durationYears: e.target.value })} />
-          </div>
-          <Input label="Overview" value={form.overview} onChange={(e) => setForm({ ...form, overview: e.target.value })} />
-          <FormMessage ok={msg.ok} text={msg.text} />
-          <Button type="submit" className="w-full">Create Degree</Button>
-        </form>
-      </Card>
+            <Select label="Degree" required value={link.degreeId} onChange={(e) => setLink({ ...link, degreeId: e.target.value })}>
+              <option value="">Select a degree</option>
+              {degrees?.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+            </Select>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Semester Fee (Rs.)" type="number" value={link.semesterFee} onChange={(e) => setLink({ ...link, semesterFee: e.target.value })} />
+              <Input label="Last Year Aggregate (%)" type="number" step="0.01" value={link.lastYearAggregate} onChange={(e) => setLink({ ...link, lastYearAggregate: e.target.value })} />
+            </div>
+            <FormMessage ok={linkMsg.ok} text={linkMsg.text} />
+            <Button type="submit" className="w-full">Link Program</Button>
+          </form>
+        </Card>
+      </div>
 
       <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Link Degree to University</h2>
-        <form onSubmit={handleLink} className="space-y-4">
-          <Select label="University" required value={link.universityId} onChange={(e) => setLink({ ...link, universityId: e.target.value })}>
-            <option value="">Select a university</option>
-            {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </Select>
-          <Select label="Degree" required value={link.degreeId} onChange={(e) => setLink({ ...link, degreeId: e.target.value })}>
-            <option value="">Select a degree</option>
-            {degrees?.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
-          </Select>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Input label="Semester Fee (Rs.)" type="number" value={link.semesterFee} onChange={(e) => setLink({ ...link, semesterFee: e.target.value })} />
-            <Input label="Last Year Aggregate (%)" type="number" step="0.01" value={link.lastYearAggregate} onChange={(e) => setLink({ ...link, lastYearAggregate: e.target.value })} />
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Degrees ({degrees?.length ?? 0})</h2>
+        {!degrees || degrees.length === 0 ? (
+          <p className="text-sm text-muted">No degrees yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {degrees.map((d) => (
+              <div key={d.id} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="font-medium text-sm text-slate-900 dark:text-white">{d.title}</p>
+                  <p className="text-xs text-muted">
+                    {d.level} · {d.durationYears} yrs
+                    {(d.expectedSalaryMin || d.expectedSalaryMax) && ` · Rs. ${d.expectedSalaryMin ?? '?'} - ${d.expectedSalaryMax ?? '?'}/mo`}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={() => startEdit(d)}>Edit</Button>
+              </div>
+            ))}
           </div>
-          <FormMessage ok={linkMsg.ok} text={linkMsg.text} />
-          <Button type="submit" className="w-full">Link Program</Button>
-        </form>
+        )}
       </Card>
     </div>
   );

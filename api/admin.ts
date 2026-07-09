@@ -70,14 +70,19 @@ if ('error' in caller) {
         break;
       }
 
-      case 'degree': {
-        if (action === 'create') {
-          const { data, error } = await admin.from('Degree').insert({ ...payload, slug: slugify(payload.title) }).select().single();
-          if (error) throw error;
-          return res.status(201).json({ success: true, data });
-        }
-        break;
-      }
+     case 'degree': {
+  if (action === 'create') {
+    const { data, error } = await admin.from('Degree').insert({ ...payload, slug: slugify(payload.title) }).select().single();
+    if (error) throw error;
+    return res.status(201).json({ success: true, data });
+  }
+  if (action === 'update') {
+    const { data, error } = await admin.from('Degree').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return res.status(200).json({ success: true, data });
+  }
+  break;
+}
 
       case 'universityDegree': {
         if (action === 'create') {

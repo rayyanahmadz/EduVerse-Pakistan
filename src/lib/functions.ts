@@ -33,6 +33,7 @@ export const adminApi = {
   deleteUniversity: (id: string) => callFunction('admin', { body: { resource: 'university', action: 'delete', id } }),
 
   createDegree: (payload: unknown) => callFunction('admin', { body: { resource: 'degree', action: 'create', payload } }),
+  updateDegree: (id: string, payload: unknown) => callFunction('admin', { body: { resource: 'degree', action: 'update', id, payload } }),
   linkDegree: (payload: unknown) => callFunction('admin', { body: { resource: 'universityDegree', action: 'create', payload } }),
 
   createScholarship: (payload: unknown) => callFunction('admin', { body: { resource: 'scholarship', action: 'create', payload } }),
