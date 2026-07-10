@@ -151,7 +151,6 @@ export default function Universities() {
                         <Bookmark className="h-4 w-4" />
                       </button>
                     )}
-                  </div>
                   <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-slate-900 dark:text-white leading-snug">{uni.shortName || uni.name}</h3>
@@ -163,31 +162,14 @@ export default function Universities() {
                       <MapPin className="h-3.5 w-3.5" /> {uni.city}, {uni.province}
                     </div>
 
-                    <div className="flex items-center gap-4 mt-3 text-sm">
-                      {uni.averageRating && (
-                        <div className="flex items-center gap-1 text-amber-500">
-                          <Star className="h-3.5 w-3.5 fill-current" /> {uni.averageRating}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-1 text-muted">
-                        <Users className="h-3.5 w-3.5" /> {uni.scholarshipsCount} scholarships
-                      </div>
-                    </div>
-
                     {uni.admissionChance && (
                       <span className={`inline-flex mt-3 w-fit px-2.5 py-1 rounded-full text-xs font-medium ${admissionChanceStyles[uni.admissionChance].className}`}>
                         {admissionChanceStyles[uni.admissionChance].label}
                       </span>
                     )}
 
-                    <div className="mt-auto pt-4 flex items-center justify-between">
-                      <div className="text-sm">
-                        <span className="text-muted">Semester Fee: </span>
-                        <span className="font-semibold text-slate-900 dark:text-white">{formatCurrencyPKR(uni.semesterFee)}</span>
-                      </div>
-                    </div>
                     <Link to={`/universities/${uni.slug}`}>
-                      <Button variant="outline" className="w-full mt-4">View Details</Button>
+                      <Button variant="outline" className="w-full mt-auto pt-4">View Details</Button>
                     </Link>
                   </div>
                 </Card>
