@@ -85,18 +85,22 @@ if ('error' in caller) {
 }
 
       case 'universityDegree': {
-        if (action === 'create') {
-          const { data, error } = await admin
-            .from('UniversityDegree')
-            .upsert(payload, { onConflict: 'universityId,degreeId' })
-            .select()
-            .single();
-          if (error) throw error;
-          return res.status(201).json({ success: true, data });
-        }
-        break;
-      }
-
+  if (action === 'create') {
+    const { data, error } = await admin
+      .from('UniversityDegree')
+      .upsert(payload, { onConflict: 'universityId,degreeId' })
+      .select()
+      .single();
+    if (error) throw error;
+    return res.status(201).json({ success: true, data });
+  }
+  if (action === 'delete') {
+    const { error } = await admin.from('UniversityDegree').delete().eq('id', id);
+    if (error) throw error;
+    return res.status(200).json({ success: true, data: null });
+  }
+  break;
+}
       case 'scholarship': {
         if (action === 'create') {
           const { data, error } = await admin

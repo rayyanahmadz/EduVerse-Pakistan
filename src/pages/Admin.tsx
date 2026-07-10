@@ -14,6 +14,7 @@ import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { PAKISTAN_PROVINCES } from '../lib/constants';
+import { listUniversityDegreeLinks } from '../lib/queries';
 
 interface AdminStats {
   universities: number;
@@ -50,6 +51,10 @@ queryFn: () => listUniversitiesAdmin(),
     queryKey: ['degrees-admin'],
     queryFn: () => listDegrees(),
   });
+  const { data: links } = useQuery({
+  queryKey: ['links-admin'],
+  queryFn: () => listUniversityDegreeLinks(),
+});
   const { data: deadlines } = useQuery({
   queryKey: ['deadlines-admin'],
   queryFn: () => listDeadlines(),
@@ -60,6 +65,7 @@ queryFn: () => listUniversitiesAdmin(),
     queryClient.invalidateQueries({ queryKey: ['universities-admin'] });
     queryClient.invalidateQueries({ queryKey: ['degrees-admin'] });
     queryClient.invalidateQueries({ queryKey: ['deadlines-admin'] });
+    queryClient.invalidateQueries({ queryKey: ['links-admin'] });
 
   };
 
@@ -97,8 +103,7 @@ queryFn: () => listUniversitiesAdmin(),
 
       {tab === 'universities' && <UniversitiesTab universities={universities} onChanged={refreshAll} />}
       {tab === 'import' && <ImportTab onChanged={refreshAll} />}
-      {tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} onChanged={refreshAll} />}
-      {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
+{tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} links={links} onChanged={refreshAll} />}      {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
 {tab === 'deadlines' && <DeadlinesTab universities={universities} deadlines={deadlines} onChanged={refreshAll} />}    </div>
   );
 }
@@ -411,7 +416,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
   );
 }
 // ---------------- Degrees Tab ----------------
-function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; onChanged: () => void }) {
+function DegreesTab({ degrees, universities, links, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; links?: any[]; onChanged: () => void }) {
   const emptyForm = { title: '', level: 'BACHELORS', durationYears: '4', overview: '', expectedSalaryMin: '', expectedSalaryMax: '' };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -482,6 +487,12 @@ function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; 
     }
   };
 
+  const handleUnlink = async (id: string, label: string) => {
+    if (!confirm(`Unlink ${label}?`)) return;
+    await adminApi.unlinkDegree(id);
+    onChanged();
+  };
+
   return (
     <div className="space-y-8">
       <div className="grid lg:grid-cols-2 gap-8">
@@ -532,6 +543,32 @@ function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; 
       </div>
 
       <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">Existing University-Degree Links ({links?.length ?? 0})</h2>
+        {!links || links.length === 0 ? (
+          <p className="text-sm text-muted">No links yet.</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {links.map((l) => (
+              <div key={l.id} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{l.degreeTitle} @ {l.universityName}</p>
+                  <p className="text-xs text-muted">
+                    {l.semesterFee ? `Rs. ${l.semesterFee}/sem` : 'No fee set'} · {l.lastYearAggregate ? `${l.lastYearAggregate}% merit` : 'No merit set'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleUnlink(l.id, `${l.degreeTitle} from ${l.universityName}`)}
+                  className="text-slate-400 hover:text-rose-500 transition-colors p-2 shrink-0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-6 sm:p-8">
         <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Degrees ({degrees?.length ?? 0})</h2>
         {!degrees || degrees.length === 0 ? (
           <p className="text-sm text-muted">No degrees yet.</p>
@@ -555,7 +592,6 @@ function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; 
     </div>
   );
 }
-
 // ---------------- Scholarships Tab ----------------
 function ScholarshipsTab({ universities }: { universities?: UniversitySummary[] }) {
   const [form, setForm] = useState({ name: '', category: 'MERIT', province: '', benefits: '', eligibility: '', deadline: '', officialLink: '' });

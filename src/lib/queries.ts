@@ -127,6 +127,14 @@ export async function getFilterMeta() {
   const cities = Array.from(new Set((data ?? []).map((r) => r.city))).sort();
   return { provinces, cities };
 }
+export async function listUniversityDegreeLinks() {
+  const { data, error } = await supabase
+    .from('UniversityDegree')
+    .select('id, semesterFee, lastYearAggregate, University ( name ), Degree ( title )')
+    .order('id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((l: any) => ({ id: l.id, semesterFee: l.semesterFee, lastYearAggregate: l.lastYearAggregate, universityName: l.University?.name, degreeTitle: l.Degree?.title }));
+}
 
 export async function getUniversityBySlug(slug: string): Promise<UniversityDetail> {
   const { data, error } = await supabase
