@@ -114,6 +114,11 @@ export async function listUniversities(params: UniversityFilterParams = {}) {
 
   return { data: paged as UniversitySummary[], meta: { total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
 }
+export async function listUniversitiesAdmin() {
+  const { data, error } = await supabase.from('University').select('*').order('name', { ascending: true });
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
 
 export async function getFilterMeta() {
   const { data, error } = await supabase.from('University').select('province, city');

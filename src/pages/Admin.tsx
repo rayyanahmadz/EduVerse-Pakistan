@@ -6,8 +6,7 @@ import {
   Trash2, Plus, CheckCircle2, XCircle, Users, Star,
 } from 'lucide-react';
 import { adminApi, importApi } from '../lib/functions';
-import { listUniversities, listDegrees } from '../lib/queries';
-import { listDeadlines } from '../lib/queries';
+import { listUniversities, listUniversitiesAdmin, listDegrees } from '../lib/queries';import { listDeadlines } from '../lib/queries';
 import { UniversitySummary, Degree } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -44,7 +43,7 @@ export default function Admin() {
 
   const { data: universities } = useQuery({
     queryKey: ['universities-admin'],
-    queryFn: async () => (await listUniversities({ pageSize: 50 })).data,
+queryFn: () => listUniversitiesAdmin(),
   });
 
   const { data: degrees } = useQuery({
@@ -127,20 +126,66 @@ function FormMessage({ ok, text }: { ok: boolean | null; text: string }) {
 
 // ---------------- Universities Tab ----------------
 function UniversitiesTab({ universities, onChanged }: { universities?: UniversitySummary[]; onChanged: () => void }) {
-  const [form, setForm] = useState({ name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', hecRanking: '' });
+  const emptyForm = {
+    name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', email: '', phone: '',
+    hecRanking: '', establishedYear: '', genderPolicy: 'CO_EDUCATION', hasHostel: false, hostelFeePerYear: '', description: '',
+  };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [search, setSearch] = useState('');
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const startEdit = (u: any) => {
+    setEditingId(u.id);
+    setForm({
+      name: u.name ?? '',
+      shortName: u.shortName ?? '',
+      sector: u.sector ?? 'PUBLIC',
+      province: u.province ?? 'Punjab',
+      city: u.city ?? '',
+      website: u.website ?? '',
+      email: u.email ?? '',
+      phone: u.phone ?? '',
+      hecRanking: u.hecRanking != null ? String(u.hecRanking) : '',
+      establishedYear: u.establishedYear != null ? String(u.establishedYear) : '',
+      genderPolicy: u.genderPolicy ?? 'CO_EDUCATION',
+      hasHostel: !!u.hasHostel,
+      hostelFeePerYear: u.hostelFeePerYear != null ? String(u.hostelFeePerYear) : '',
+      description: u.description ?? '',
+    });
+    setMsg({ ok: null, text: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMsg({ ok: null, text: '' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    const payload = {
+      ...form,
+      hecRanking: form.hecRanking ? Number(form.hecRanking) : null,
+      establishedYear: form.establishedYear ? Number(form.establishedYear) : null,
+      hostelFeePerYear: form.hostelFeePerYear ? Number(form.hostelFeePerYear) : null,
+    };
     try {
-      await adminApi.createUniversity({ ...form, hecRanking: form.hecRanking ? Number(form.hecRanking) : undefined });
-      setMsg({ ok: true, text: `${form.name} created.` });
-      setForm({ name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', hecRanking: '' });
+      if (editingId) {
+        await adminApi.updateUniversity(editingId, payload);
+        setMsg({ ok: true, text: `${form.name} updated.` });
+        setEditingId(null);
+      } else {
+        await adminApi.createUniversity(payload);
+        setMsg({ ok: true, text: `${form.name} created.` });
+      }
+      setForm(emptyForm);
       onChanged();
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create.' });
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to save.' });
     } finally {
       setSubmitting(false);
     }
@@ -149,14 +194,19 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Delete ${name}? This cannot be undone.`)) return;
     await adminApi.deleteUniversity(id);
+    if (editingId === id) cancelEdit();
     onChanged();
   };
+
+  const filtered = universities?.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <div className="grid lg:grid-cols-2 gap-8">
       <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add University</h2>
-        <form onSubmit={handleCreate} className="space-y-4">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <Plus className="h-4 w-4" /> {editingId ? 'Edit University' : 'Add University'}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
           <Input label="Full Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Input label="Short Name" value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} placeholder="e.g. NUST" />
           <div className="grid sm:grid-cols-2 gap-4">
@@ -173,24 +223,56 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
             <Input label="City" required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
             <Input label="HEC Ranking" type="number" value={form.hecRanking} onChange={(e) => setForm({ ...form, hecRanking: e.target.value })} />
           </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Established Year" type="number" value={form.establishedYear} onChange={(e) => setForm({ ...form, establishedYear: e.target.value })} />
+            <Select label="Gender Policy" value={form.genderPolicy} onChange={(e) => setForm({ ...form, genderPolicy: e.target.value })}>
+              <option value="CO_EDUCATION">Co-Education</option>
+              <option value="MALE_ONLY">Male Only</option>
+              <option value="FEMALE_ONLY">Female Only</option>
+            </Select>
+          </div>
           <Input label="Website" type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://" />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="hasHostel" checked={form.hasHostel} onChange={(e) => setForm({ ...form, hasHostel: e.target.checked })} className="h-4 w-4 rounded" />
+            <label htmlFor="hasHostel" className="text-sm text-slate-700 dark:text-slate-300">Has Hostel</label>
+          </div>
+          {form.hasHostel && (
+            <Input label="Hostel Fee Per Year (Rs.)" type="number" value={form.hostelFeePerYear} onChange={(e) => setForm({ ...form, hostelFeePerYear: e.target.value })} />
+          )}
+          <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <FormMessage ok={msg.ok} text={msg.text} />
-          <Button type="submit" className="w-full" isLoading={submitting}>Create University</Button>
+          <div className="flex gap-3">
+            <Button type="submit" className="w-full" isLoading={submitting}>{editingId ? 'Update University' : 'Create University'}</Button>
+            {editingId && <Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button>}
+          </div>
         </form>
       </Card>
 
       <Card className="p-6 sm:p-8">
         <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Universities ({universities?.length ?? 0})</h2>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search..."
+          className="w-full mb-4 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
         <div className="space-y-2 max-h-[32rem] overflow-y-auto">
-          {universities?.map((u) => (
+          {filtered?.map((u) => (
             <div key={u.id} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
               <div>
                 <p className="text-sm font-medium text-slate-900 dark:text-white">{u.name}</p>
                 <p className="text-xs text-muted">{u.city}, {u.province} • <Badge className="ml-1">{u.sector}</Badge></p>
               </div>
-              <button onClick={() => handleDelete(u.id, u.name)} className="text-slate-400 hover:text-rose-500 transition-colors shrink-0">
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <div className="flex gap-2 shrink-0">
+                <Button variant="outline" onClick={() => startEdit(u)}>Edit</Button>
+                <button onClick={() => handleDelete(u.id, u.name)} className="text-slate-400 hover:text-rose-500 transition-colors p-2">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -205,6 +287,7 @@ const IMPORT_FIELDS: Record<string, string> = {
   degree: 'title,level,durationYears,overview,eligibility,careerOpportunities,futureScope,expectedSalaryMin,expectedSalaryMax,skillsNeeded',
   scholarship: 'name,category,province,isInternational,benefits,eligibility,requiredDocuments,deadline,officialLink,description',
   deadline: 'universitySlug,type,title,date,notes',
+  universityDegree: 'universitySlug,degreeSlug,semesterFee,totalFee,lastYearAggregate,seatsAvailable,entryTestRequired,entryTestName',
 };
 
 const IMPORT_JSON_EXAMPLE: Record<string, string> = {
@@ -212,6 +295,7 @@ const IMPORT_JSON_EXAMPLE: Record<string, string> = {
   degree: '{\n  "rows": [\n    { "title": "BS Data Science", "level": "BACHELORS", "durationYears": 4, "skillsNeeded": "Python;SQL;Statistics" }\n  ]\n}',
   scholarship: '{\n  "rows": [\n    { "name": "Example Scholarship", "category": "MERIT" }\n  ]\n}',
   deadline: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "type": "ADMISSION_OPEN", "title": "Fall 2026 Admissions Open", "date": "2026-08-01" }\n  ]\n}',
+universityDegree: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "degreeSlug": "doctor-of-pharmacy-pharmd", "semesterFee": 85000, "lastYearAggregate": 72.5 }\n  ]\n}',
 };
 
 function ImportTab({ onChanged }: { onChanged: () => void }) {
@@ -271,6 +355,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
           <option value="degree">Degrees</option>
           <option value="scholarship">Scholarships</option>
           <option value="deadline">Admission Calendar Deadlines</option>
+          <option value="universityDegree">Link Degrees to Universities (Fee + Merit)</option>
         </Select>
       </Card>
 

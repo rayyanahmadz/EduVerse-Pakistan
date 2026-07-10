@@ -143,7 +143,42 @@ function normalizeScholarship(raw: Record<string, any>): NormalizeResult {
     },
   };
 }
+// ---------------------------------------------------------------------------
+// UniversityDegree — links an existing degree to an existing university
+// with per-program fee and merit data. Needs both FKs resolved.
+// ---------------------------------------------------------------------------
+async function normalizeUniversityDegree(raw: Record<string, any>): Promise<NormalizeResult> {
+  const universityKey = raw.universitySlug || raw.universityName;
+  const degreeKey = raw.degreeSlug || raw.degreeTitle;
+  if (!universityKey) return { ok: false, reason: 'Missing required field "universitySlug" (or "universityName")' };
+  if (!degreeKey) return { ok: false, reason: 'Missing required field "degreeSlug" (or "degreeTitle")' };
 
+  let uQuery = admin.from('University').select('id').limit(1);
+  uQuery = raw.universitySlug ? uQuery.eq('slug', String(raw.universitySlug).trim()) : uQuery.ilike('name', String(raw.universityName).trim());
+  const { data: uni, error: uniError } = await uQuery.maybeSingle();
+  if (uniError) return { ok: false, reason: `University lookup failed: ${uniError.message}` };
+  if (!uni) return { ok: false, reason: `No university found matching "${universityKey}"` };
+
+  let dQuery = admin.from('Degree').select('id').limit(1);
+  dQuery = raw.degreeSlug ? dQuery.eq('slug', String(raw.degreeSlug).trim()) : dQuery.ilike('title', String(raw.degreeTitle).trim());
+  const { data: deg, error: degError } = await dQuery.maybeSingle();
+  if (degError) return { ok: false, reason: `Degree lookup failed: ${degError.message}` };
+  if (!deg) return { ok: false, reason: `No degree found matching "${degreeKey}"` };
+
+  return {
+    ok: true,
+    data: {
+      universityId: uni.id,
+      degreeId: deg.id,
+      semesterFee: raw.semesterFee ? Number(raw.semesterFee) : null,
+      totalFee: raw.totalFee ? Number(raw.totalFee) : null,
+      lastYearAggregate: raw.lastYearAggregate ? Number(raw.lastYearAggregate) : null,
+      seatsAvailable: raw.seatsAvailable ? Number(raw.seatsAvailable) : null,
+      entryTestRequired: raw.entryTestRequired === true || String(raw.entryTestRequired).toLowerCase() === 'true',
+      entryTestName: raw.entryTestName || null,
+    },
+  };
+}
 // ---------------------------------------------------------------------------
 // Deadline — needs a university lookup (slug or name) to resolve the FK
 // ---------------------------------------------------------------------------
@@ -187,6 +222,7 @@ const TABLES: Record<string, string> = {
   degree: 'Degree',
   scholarship: 'Scholarship',
   deadline: 'Deadline',
+  universityDegree: 'UniversityDegree',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -234,8 +270,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (resource === 'university') normalized = normalizeUniversity(rawRows[i]);
     else if (resource === 'degree') normalized = normalizeDegree(rawRows[i]);
     else if (resource === 'scholarship') normalized = normalizeScholarship(rawRows[i]);
-    else normalized = await normalizeDeadline(rawRows[i]);
-
+    else if (resource === 'deadline') normalized = await normalizeDeadline(rawRows[i]);
+    else normalized = await normalizeUniversityDegree(rawRows[i]);
     if (!normalized.ok) {
       skipped++;
       details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason ?? 'Invalid row.' });
@@ -243,9 +279,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const table = TABLES[resource];
-    const insertData = resource === 'deadline' ? normalized.data : { ...normalized.data, slug: slugify(normalized.data.name ?? normalized.data.title) };
+    const needsSlug = resource !== 'deadline' && resource !== 'universityDegree';
+    const insertData = needsSlug ? { ...normalized.data, slug: slugify(normalized.data.name ?? normalized.data.title) } : normalized.data;
 
-    const { error } = await admin.from(table).insert(insertData);
+    const { error } = resource === 'universityDegree'
+      ? await admin.from(table).upsert(insertData, { onConflict: 'universityId,degreeId' })
+      : await admin.from(table).insert(insertData);
 
     if (error) {
       skipped++;
