@@ -151,6 +151,7 @@ export default function Universities() {
                         <Bookmark className="h-4 w-4" />
                       </button>
                     )}
+                  </div>
                   <div className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="font-semibold text-slate-900 dark:text-white leading-snug">{uni.shortName || uni.name}</h3>
