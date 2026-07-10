@@ -7,6 +7,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { formatCurrencyPKR } from '../lib/utils';
+import { DataDisclaimer } from '../components/ui/DataDisclaimer';
 
 export default function MeritPredictor() {
   const [form, setForm] = useState({ matricMarks: '', interMarks: '', entryTestMarks: '' });
@@ -54,6 +55,7 @@ export default function MeritPredictor() {
 
       {result && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl mx-auto mt-12">
+          <DataDisclaimer />
           <div className="text-center mb-8">
             <div className="text-sm text-muted">Your Calculated Aggregate</div>
             <div className="text-5xl font-extrabold text-brand-600 dark:text-brand-400 mt-1">{result.aggregate}%</div>

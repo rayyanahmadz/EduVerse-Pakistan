@@ -12,6 +12,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { ErrorState } from '../components/ui/ErrorState';
 import { formatCurrencyPKR } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { DataDisclaimer } from '../components/ui/DataDisclaimer';
 
 export default function DegreeDetail() {
   const { slug } = useParams();
@@ -102,9 +103,9 @@ export default function DegreeDetail() {
                   ))}
                 </div>
               )}
+              <DataDisclaimer compact />
             </Card>
           </div>
-
           <div className="space-y-6">
             {(degree.expectedSalaryMin || degree.expectedSalaryMax) && (
               <Card className="p-6">

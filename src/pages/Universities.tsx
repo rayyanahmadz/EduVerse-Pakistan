@@ -15,6 +15,7 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { formatCurrencyPKR, admissionChanceStyles } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { DataDisclaimer } from '../components/ui/DataDisclaimer';
 
 export default function Universities() {
   const [params, setParams] = useSearchParams();
@@ -134,7 +135,7 @@ export default function Universities() {
       {!isLoading && !isError && data?.data.length === 0 && (
         <EmptyState icon={Search} title="No universities found" description="Try adjusting your filters or search term." />
       )}
-
+{!isLoading && !isError && data && data.data.length > 0 && <DataDisclaimer compact />}
       {!isLoading && !isError && data && data.data.length > 0 && (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">

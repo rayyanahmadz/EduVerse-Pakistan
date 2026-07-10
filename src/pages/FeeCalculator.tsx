@@ -8,6 +8,7 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { formatCurrencyPKR } from '../lib/utils';
+import { DataDisclaimer } from '../components/ui/DataDisclaimer';
 
 export default function FeeCalculator() {
   const [universityId, setUniversityId] = useState('');
@@ -85,8 +86,7 @@ export default function FeeCalculator() {
               <span className="font-semibold text-slate-900 dark:text-white">Total per Year</span>
               <span className="text-2xl font-extrabold text-brand-600 dark:text-brand-400">{formatCurrencyPKR(totals.total)}</span>
             </div>
-            <p className="text-xs text-muted mt-4">This is an estimate for planning purposes. Actual costs vary by university, city, and lifestyle.</p>
-          </Card>
+<DataDisclaimer compact />          </Card>
         </motion.div>
       </div>
     </div>

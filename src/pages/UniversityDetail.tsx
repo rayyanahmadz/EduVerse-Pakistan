@@ -12,6 +12,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { Skeleton } from '../components/ui/Skeleton';
 import { formatCurrencyPKR, formatDate } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import { DataDisclaimer } from '../components/ui/DataDisclaimer';
 
 const facilityIcons: Record<string, any> = {
   hasWifi: Wifi,
@@ -145,6 +146,7 @@ export default function UniversityDetail() {
                 ))}
               </div>
             )}
+            <DataDisclaimer compact />
           </Card>
 
           <Card className="p-6">
