@@ -135,8 +135,7 @@ export default function Universities() {
       {!isLoading && !isError && data?.data.length === 0 && (
         <EmptyState icon={Search} title="No universities found" description="Try adjusting your filters or search term." />
       )}
-{!isLoading && !isError && data && data.data.length > 0 && <DataDisclaimer compact />}
-      {!isLoading && !isError && data && data.data.length > 0 && (
+{!isLoading && !isError && data && data.data.length > 0 && <DataDisclaimer compact className="mb-6" />}      {!isLoading && !isError && data && data.data.length > 0 && (
         <>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {data.data.map((uni, i) => (
