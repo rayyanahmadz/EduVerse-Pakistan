@@ -1,22 +1,21 @@
-import { AlertTriangle } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 export function DataDisclaimer({ compact = false }: { compact?: boolean }) {
   if (compact) {
     return (
-      <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400 mt-2">
-        <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-        Fee and merit figures are estimates for planning purposes — confirm exact numbers with the university directly.
+      <p className="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-slate-400 dark:text-slate-500" />
+        Figures are indicative estimates. Confirm current rates with the university before applying.
       </p>
     );
   }
 
   return (
-    <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
-      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+    <div className="flex items-start gap-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 px-4 py-3.5 text-sm text-slate-600 dark:text-slate-400 mb-6">
+      <Info className="h-4 w-4 shrink-0 mt-0.5 text-slate-400 dark:text-slate-500" />
       <p>
-        Fees, merit cutoffs, and salary figures shown here are <strong>estimates for planning purposes only</strong>,
-        not official or guaranteed numbers. Always confirm exact figures directly with the university's admissions office
-        or official prospectus before making any decisions.
+        The figures displayed are approximate and provided for informational purposes only. For accurate and
+        up-to-date information, please consult the university's official admissions office.
       </p>
     </div>
   );
