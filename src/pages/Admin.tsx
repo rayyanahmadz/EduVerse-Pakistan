@@ -200,14 +200,37 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
 }
 
 // ---------------- Bulk Import Tab ----------------
+const IMPORT_FIELDS: Record<string, string> = {
+  university: 'name,shortName,sector,province,city,website,email,phone,hecRanking,establishedYear,genderPolicy,hasHostel,hostelFeePerYear,description',
+  degree: 'title,level,durationYears,overview,eligibility,careerOpportunities,futureScope,expectedSalaryMin,expectedSalaryMax,skillsNeeded',
+  scholarship: 'name,category,province,isInternational,benefits,eligibility,requiredDocuments,deadline,officialLink,description',
+  deadline: 'universitySlug,type,title,date,notes',
+};
+
+const IMPORT_JSON_EXAMPLE: Record<string, string> = {
+  university: '{\n  "rows": [\n    { "name": "Example University", "province": "Punjab", "city": "Lahore", "sector": "PUBLIC" }\n  ]\n}',
+  degree: '{\n  "rows": [\n    { "title": "BS Data Science", "level": "BACHELORS", "durationYears": 4, "skillsNeeded": "Python;SQL;Statistics" }\n  ]\n}',
+  scholarship: '{\n  "rows": [\n    { "name": "Example Scholarship", "category": "MERIT" }\n  ]\n}',
+  deadline: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "type": "ADMISSION_OPEN", "title": "Fall 2026 Admissions Open", "date": "2026-08-01" }\n  ]\n}',
+};
+
 function ImportTab({ onChanged }: { onChanged: () => void }) {
+  const [resource, setResource] = useState<'university' | 'degree' | 'scholarship' | 'deadline'>('university');
   const [file, setFile] = useState<File | null>(null);
-  const [jsonText, setJsonText] = useState('{\n  "universities": [\n    { "name": "Example University", "province": "Punjab", "city": "Lahore", "sector": "PUBLIC" }\n  ]\n}');
+  const [jsonText, setJsonText] = useState(IMPORT_JSON_EXAMPLE.university);
   const [csvResult, setCsvResult] = useState<any>(null);
   const [jsonResult, setJsonResult] = useState<any>(null);
   const [error, setError] = useState('');
   const [loadingCsv, setLoadingCsv] = useState(false);
   const [loadingJson, setLoadingJson] = useState(false);
+
+  const changeResource = (r: 'university' | 'degree' | 'scholarship' | 'deadline') => {
+    setResource(r);
+    setJsonText(IMPORT_JSON_EXAMPLE[r]);
+    setCsvResult(null);
+    setJsonResult(null);
+    setError('');
+  };
 
   const handleCsvImport = async () => {
     if (!file) return;
@@ -215,7 +238,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
     setError('');
     try {
       const csvText = await file.text();
-      const result = await importApi.importCsv(csvText);
+      const result = await importApi.importCsv(resource, csvText);
       setCsvResult(result);
       onChanged();
     } catch (err) {
@@ -230,7 +253,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
     setError('');
     try {
       const parsed = JSON.parse(jsonText);
-      const result = await importApi.importJson(parsed.universities ?? parsed);
+      const result = await importApi.importJson(resource, parsed.rows ?? parsed);
       setJsonResult(result);
       onChanged();
     } catch (err) {
@@ -241,50 +264,67 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
   };
 
   return (
-    <div className="grid lg:grid-cols-2 gap-8">
+    <div className="space-y-6">
       <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> CSV Importer</h2>
-        <p className="text-xs text-muted mb-4">
-          Header row required: <code className="text-[11px]">name,shortName,sector,province,city,website,email,phone,hecRanking,establishedYear,genderPolicy,hasHostel,hostelFeePerYear,description</code>
-        </p>
-        <input
-          type="file"
-          accept=".csv"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-brand-50 dark:file:bg-slate-800 file:text-brand-700 dark:file:text-brand-300 file:text-sm mb-4"
-        />
-        <Button onClick={handleCsvImport} disabled={!file} isLoading={loadingCsv}>Import CSV</Button>
-        {csvResult && (
-          <div className="mt-4 text-sm space-y-1">
-            <p className="text-emerald-600 dark:text-emerald-400">{csvResult.created} created</p>
-            <p className="text-amber-600 dark:text-amber-400">{csvResult.skipped} skipped</p>
-          </div>
-        )}
+        <Select label="What are you importing?" value={resource} onChange={(e) => changeResource(e.target.value as any)}>
+          <option value="university">Universities</option>
+          <option value="degree">Degrees</option>
+          <option value="scholarship">Scholarships</option>
+          <option value="deadline">Admission Calendar Deadlines</option>
+        </Select>
       </Card>
 
-      <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> JSON Importer</h2>
-        <p className="text-xs text-muted mb-4">Paste a JSON object with a <code>universities</code> array.</p>
-        <textarea
-          value={jsonText}
-          onChange={(e) => setJsonText(e.target.value)}
-          rows={10}
-          className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-4"
-        />
-        <Button onClick={handleJsonImport} isLoading={loadingJson}>Import JSON</Button>
-        {jsonResult && (
-          <div className="mt-4 text-sm space-y-1">
-            <p className="text-emerald-600 dark:text-emerald-400">{jsonResult.created} created</p>
-            <p className="text-amber-600 dark:text-amber-400">{jsonResult.skipped} skipped</p>
-          </div>
-        )}
-      </Card>
+      <div className="grid lg:grid-cols-2 gap-8">
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> CSV Importer</h2>
+          <p className="text-xs text-muted mb-4">
+            Header row required: <code className="text-[11px]">{IMPORT_FIELDS[resource]}</code>
+            {resource === 'deadline' && <> — <code>universitySlug</code> must match an existing university's slug exactly.</>}
+          </p>
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-brand-50 dark:file:bg-slate-800 file:text-brand-700 dark:file:text-brand-300 file:text-sm mb-4"
+          />
+          <Button onClick={handleCsvImport} disabled={!file} isLoading={loadingCsv}>Import CSV</Button>
+          {csvResult && (
+            <div className="mt-4 text-sm space-y-1">
+              <p className="text-emerald-600 dark:text-emerald-400">{csvResult.created} created</p>
+              <p className="text-amber-600 dark:text-amber-400">{csvResult.skipped} skipped</p>
+              {csvResult.details?.filter((d: any) => d.status === 'skipped').map((d: any, i: number) => (
+                <p key={i} className="text-xs text-rose-500">Row {d.row}: {d.reason}</p>
+              ))}
+            </div>
+          )}
+        </Card>
 
-      {error && <p className="text-sm text-rose-500 lg:col-span-2">{error}</p>}
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-2 flex items-center gap-2"><UploadCloud className="h-4 w-4" /> JSON Importer</h2>
+          <p className="text-xs text-muted mb-4">Paste a JSON object with a <code>rows</code> array.</p>
+          <textarea
+            value={jsonText}
+            onChange={(e) => setJsonText(e.target.value)}
+            rows={10}
+            className="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3 text-xs font-mono text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 mb-4"
+          />
+          <Button onClick={handleJsonImport} isLoading={loadingJson}>Import JSON</Button>
+          {jsonResult && (
+            <div className="mt-4 text-sm space-y-1">
+              <p className="text-emerald-600 dark:text-emerald-400">{jsonResult.created} created</p>
+              <p className="text-amber-600 dark:text-amber-400">{jsonResult.skipped} skipped</p>
+              {jsonResult.details?.filter((d: any) => d.status === 'skipped').map((d: any, i: number) => (
+                <p key={i} className="text-xs text-rose-500">Row {d.row}: {d.reason}</p>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {error && <p className="text-sm text-rose-500">{error}</p>}
     </div>
   );
 }
-
 // ---------------- Degrees Tab ----------------
 function DegreesTab({ degrees, universities, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; onChanged: () => void }) {
   const emptyForm = { title: '', level: 'BACHELORS', durationYears: '4', overview: '', expectedSalaryMin: '', expectedSalaryMax: '' };
