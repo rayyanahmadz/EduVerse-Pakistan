@@ -1,9 +1,10 @@
 // Vercel Serverless Function: POST /api/import
 //
-// Bulk-imports universities from CSV text or a JSON array, using the
-// service-role key. Same admin-only guard as api/admin.ts. This is how the
-// catalog grows to every HEC-recognized university without touching code —
-// paste a CSV or JSON payload in the Admin Panel's Bulk Import tab.
+// Bulk-imports universities, degrees, scholarships, or admission-calendar
+// deadlines from CSV text or a JSON array, using the service-role key.
+// Same admin-only guard as api/admin.ts. This is how the catalog grows
+// without touching code — paste a CSV or JSON payload in the Admin Panel's
+// Bulk Import tab, pick which resource it's for, and go.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { admin, slugify, requireAdmin } from './_lib/supabaseAdmin.js';
@@ -14,11 +15,7 @@ interface ImportRow {
   reason?: string;
 }
 
-const REQUIRED_FIELDS = ['name', 'province', 'city', 'sector'];
-const VALID_SECTORS = ['PUBLIC', 'PRIVATE', 'SEMI_GOVERNMENT'];
-const VALID_GENDER_POLICIES = ['CO_EDUCATION', 'MALE_ONLY', 'FEMALE_ONLY'];
-
-/** Minimal CSV parser — handles quoted fields with commas, good enough for a simple flat university sheet. */
+/** Minimal CSV parser — handles quoted fields with commas. */
 function parseCsv(text: string): Record<string, string>[] {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -49,21 +46,28 @@ function parseCsv(text: string): Record<string, string>[] {
   });
 }
 
-function normalizeRow(raw: Record<string, any>): { ok: boolean; data?: any; reason?: string } {  for (const field of REQUIRED_FIELDS) {
-    if (!raw[field] || String(raw[field]).trim() === '') {
-      return { ok: false, reason: `Missing required field "${field}"` };
-    }
-  }
+function splitList(value: any): string[] {
+  if (!value) return [];
+  return String(value).split(/[;|]/).map((s) => s.trim()).filter(Boolean);
+}
 
-  const sector = String(raw.sector).toUpperCase().trim();
-  if (!VALID_SECTORS.includes(sector)) {
-    return { ok: false, reason: `Invalid sector "${raw.sector}" (expected PUBLIC, PRIVATE, or SEMI_GOVERNMENT)` };
+type NormalizeResult = { ok: boolean; data?: any; reason?: string };
+
+// ---------------------------------------------------------------------------
+// University
+// ---------------------------------------------------------------------------
+const VALID_SECTORS = ['PUBLIC', 'PRIVATE', 'SEMI_GOVERNMENT'];
+const VALID_GENDER_POLICIES = ['CO_EDUCATION', 'MALE_ONLY', 'FEMALE_ONLY'];
+
+function normalizeUniversity(raw: Record<string, any>): NormalizeResult {
+  for (const field of ['name', 'province', 'city', 'sector']) {
+    if (!raw[field] || String(raw[field]).trim() === '') return { ok: false, reason: `Missing required field "${field}"` };
   }
+  const sector = String(raw.sector).toUpperCase().trim();
+  if (!VALID_SECTORS.includes(sector)) return { ok: false, reason: `Invalid sector "${raw.sector}" (expected PUBLIC, PRIVATE, or SEMI_GOVERNMENT)` };
 
   const genderPolicy = raw.genderPolicy ? String(raw.genderPolicy).toUpperCase().trim() : 'CO_EDUCATION';
-  if (!VALID_GENDER_POLICIES.includes(genderPolicy)) {
-    return { ok: false, reason: `Invalid genderPolicy "${raw.genderPolicy}"` };
-  }
+  if (!VALID_GENDER_POLICIES.includes(genderPolicy)) return { ok: false, reason: `Invalid genderPolicy "${raw.genderPolicy}"` };
 
   return {
     ok: true,
@@ -86,17 +90,120 @@ function normalizeRow(raw: Record<string, any>): { ok: boolean; data?: any; reas
   };
 }
 
+// ---------------------------------------------------------------------------
+// Degree
+// ---------------------------------------------------------------------------
+const VALID_LEVELS = ['ASSOCIATE', 'BACHELORS', 'MASTERS', 'MPHIL', 'PHD', 'DIPLOMA'];
+
+function normalizeDegree(raw: Record<string, any>): NormalizeResult {
+  if (!raw.title || String(raw.title).trim() === '') return { ok: false, reason: 'Missing required field "title"' };
+  const level = raw.level ? String(raw.level).toUpperCase().trim() : 'BACHELORS';
+  if (!VALID_LEVELS.includes(level)) return { ok: false, reason: `Invalid level "${raw.level}" (expected one of ${VALID_LEVELS.join(', ')})` };
+
+  return {
+    ok: true,
+    data: {
+      title: String(raw.title).trim(),
+      level,
+      durationYears: raw.durationYears ? Number(raw.durationYears) : 4,
+      overview: raw.overview || null,
+      eligibility: raw.eligibility || null,
+      careerOpportunities: raw.careerOpportunities || null,
+      futureScope: raw.futureScope || null,
+      expectedSalaryMin: raw.expectedSalaryMin ? Number(raw.expectedSalaryMin) : null,
+      expectedSalaryMax: raw.expectedSalaryMax ? Number(raw.expectedSalaryMax) : null,
+      skillsNeeded: splitList(raw.skillsNeeded),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Scholarship
+// ---------------------------------------------------------------------------
+const VALID_CATEGORIES = ['MERIT', 'NEED_BASED', 'PROVINCIAL', 'INTERNATIONAL', 'GOVERNMENT', 'PRIVATE'];
+
+function normalizeScholarship(raw: Record<string, any>): NormalizeResult {
+  if (!raw.name || String(raw.name).trim() === '') return { ok: false, reason: 'Missing required field "name"' };
+  const category = raw.category ? String(raw.category).toUpperCase().trim() : '';
+  if (!VALID_CATEGORIES.includes(category)) return { ok: false, reason: `Invalid category "${raw.category}" (expected one of ${VALID_CATEGORIES.join(', ')})` };
+
+  return {
+    ok: true,
+    data: {
+      name: String(raw.name).trim(),
+      category,
+      province: raw.province || null,
+      isInternational: raw.isInternational === true || String(raw.isInternational).toLowerCase() === 'true',
+      benefits: raw.benefits || null,
+      eligibility: raw.eligibility || null,
+      requiredDocuments: splitList(raw.requiredDocuments),
+      deadline: raw.deadline ? new Date(raw.deadline).toISOString() : null,
+      officialLink: raw.officialLink || null,
+      description: raw.description || null,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Deadline — needs a university lookup (slug or name) to resolve the FK
+// ---------------------------------------------------------------------------
+const VALID_DEADLINE_TYPES = ['ADMISSION_OPEN', 'ADMISSION_CLOSE', 'ENTRY_TEST', 'INTERVIEW', 'MERIT_LIST', 'SCHOLARSHIP_DEADLINE', 'CLASSES_START'];
+
+async function normalizeDeadline(raw: Record<string, any>): Promise<NormalizeResult> {
+  const universityKey = raw.universitySlug || raw.universityName;
+  if (!universityKey) return { ok: false, reason: 'Missing required field "universitySlug" (or "universityName")' };
+  if (!raw.title) return { ok: false, reason: 'Missing required field "title"' };
+  if (!raw.date) return { ok: false, reason: 'Missing required field "date"' };
+
+  const type = raw.type ? String(raw.type).toUpperCase().trim() : '';
+  if (!VALID_DEADLINE_TYPES.includes(type)) return { ok: false, reason: `Invalid type "${raw.type}" (expected one of ${VALID_DEADLINE_TYPES.join(', ')})` };
+
+  const date = new Date(raw.date);
+  if (Number.isNaN(date.getTime())) return { ok: false, reason: `Invalid date "${raw.date}" (use YYYY-MM-DD)` };
+
+  let query = admin.from('University').select('id').limit(1);
+  query = raw.universitySlug ? query.eq('slug', String(raw.universitySlug).trim()) : query.ilike('name', String(raw.universityName).trim());
+  const { data: uni, error: uniError } = await query.maybeSingle();
+  if (uniError) return { ok: false, reason: `University lookup failed: ${uniError.message}` };
+  if (!uni) return { ok: false, reason: `No university found matching "${universityKey}"` };
+
+  return {
+    ok: true,
+    data: {
+      universityId: uni.id,
+      type,
+      title: String(raw.title).trim(),
+      date: date.toISOString(),
+      notes: raw.notes || null,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
+const TABLES: Record<string, string> = {
+  university: 'University',
+  degree: 'Degree',
+  scholarship: 'Scholarship',
+  deadline: 'Deadline',
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed. Use POST.' });
   }
 
   const caller = await requireAdmin(req);
-if ('error' in caller) {
-  return res.status(403).json({ success: false, message: caller.error });
-}
+  if ('error' in caller) {
+    return res.status(403).json({ success: false, message: caller.error });
+  }
 
-  const { format, csvText, universities } = req.body ?? {};
+  const { resource = 'university', format, csvText, rows: jsonRows, universities } = req.body ?? {};
+
+  if (!TABLES[resource]) {
+    return res.status(400).json({ success: false, message: `Unknown resource "${resource}". Expected university, degree, scholarship, or deadline.` });
+  }
 
   let rawRows: Record<string, any>[] = [];
   if (format === 'csv') {
@@ -105,10 +212,13 @@ if ('error' in caller) {
     }
     rawRows = parseCsv(csvText);
   } else if (format === 'json') {
-    if (!Array.isArray(universities)) {
-      return res.status(400).json({ success: false, message: 'universities must be an array for format="json".' });
+    // "universities" is kept as a legacy alias so old frontend code calling
+    // importJson(universities) for university imports keeps working.
+    const arr = jsonRows ?? universities;
+    if (!Array.isArray(arr)) {
+      return res.status(400).json({ success: false, message: '"rows" must be an array for format="json".' });
     }
-    rawRows = universities;
+    rawRows = arr;
   } else {
     return res.status(400).json({ success: false, message: 'format must be "csv" or "json".' });
   }
@@ -119,19 +229,27 @@ if ('error' in caller) {
 
   for (let i = 0; i < rawRows.length; i++) {
     const rowNumber = i + 1;
-    const normalized = normalizeRow(rawRows[i]);
+
+    let normalized: NormalizeResult;
+    if (resource === 'university') normalized = normalizeUniversity(rawRows[i]);
+    else if (resource === 'degree') normalized = normalizeDegree(rawRows[i]);
+    else if (resource === 'scholarship') normalized = normalizeScholarship(rawRows[i]);
+    else normalized = await normalizeDeadline(rawRows[i]);
 
     if (!normalized.ok) {
       skipped++;
-details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason ?? 'Invalid row.' });      continue;
+      details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason ?? 'Invalid row.' });
+      continue;
     }
 
-    const slug = slugify(normalized.data.name);
-    const { error } = await admin.from('University').insert({ ...normalized.data, slug });
+    const table = TABLES[resource];
+    const insertData = resource === 'deadline' ? normalized.data : { ...normalized.data, slug: slugify(normalized.data.name ?? normalized.data.title) };
+
+    const { error } = await admin.from(table).insert(insertData);
 
     if (error) {
       skipped++;
-      details.push({ row: rowNumber, status: 'skipped', reason: error.message.includes('duplicate') ? 'A university with this name already exists.' : error.message });
+      details.push({ row: rowNumber, status: 'skipped', reason: error.message.includes('duplicate') ? 'A row with this name/title already exists.' : error.message });
     } else {
       created++;
       details.push({ row: rowNumber, status: 'created' });
