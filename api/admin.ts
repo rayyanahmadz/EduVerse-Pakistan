@@ -110,14 +110,24 @@ if ('error' in caller) {
         break;
       }
 
-      case 'deadline': {
-        if (action === 'create') {
-          const { data, error } = await admin.from('Deadline').insert(payload).select().single();
-          if (error) throw error;
-          return res.status(201).json({ success: true, data });
-        }
-        break;
-      }
+     case 'deadline': {
+  if (action === 'create') {
+    const { data, error } = await admin.from('Deadline').insert(payload).select().single();
+    if (error) throw error;
+    return res.status(201).json({ success: true, data });
+  }
+  if (action === 'update') {
+    const { data, error } = await admin.from('Deadline').update(payload).eq('id', id).select().single();
+    if (error) throw error;
+    return res.status(200).json({ success: true, data });
+  }
+  if (action === 'delete') {
+    const { error } = await admin.from('Deadline').delete().eq('id', id);
+    if (error) throw error;
+    return res.status(200).json({ success: true, data: null });
+  }
+  break;
+}
 
       default:
         return res.status(400).json({ success: false, message: `Unknown resource: ${resource}` });

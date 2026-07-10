@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { adminApi, importApi } from '../lib/functions';
 import { listUniversities, listDegrees } from '../lib/queries';
+import { listDeadlines } from '../lib/queries';
 import { UniversitySummary, Degree } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -50,12 +51,19 @@ export default function Admin() {
     queryKey: ['degrees-admin'],
     queryFn: () => listDegrees(),
   });
+  const { data: deadlines } = useQuery({
+  queryKey: ['deadlines-admin'],
+  queryFn: () => listDeadlines(),
+});
 
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
     queryClient.invalidateQueries({ queryKey: ['universities-admin'] });
     queryClient.invalidateQueries({ queryKey: ['degrees-admin'] });
+    queryClient.invalidateQueries({ queryKey: ['deadlines-admin'] });
+
   };
+
 
   return (
     <div className="container-page py-10">
@@ -92,8 +100,7 @@ export default function Admin() {
       {tab === 'import' && <ImportTab onChanged={refreshAll} />}
       {tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} onChanged={refreshAll} />}
       {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
-      {tab === 'deadlines' && <DeadlinesTab universities={universities} />}
-    </div>
+{tab === 'deadlines' && <DeadlinesTab universities={universities} deadlines={deadlines} onChanged={refreshAll} />}    </div>
   );
 }
 
@@ -468,38 +475,110 @@ function ScholarshipsTab({ universities }: { universities?: UniversitySummary[] 
 }
 
 // ---------------- Deadlines Tab ----------------
-function DeadlinesTab({ universities }: { universities?: UniversitySummary[] }) {
-  const [form, setForm] = useState({ universityId: '', type: 'ADMISSION_OPEN', title: '', date: '', notes: '' });
+interface DeadlineItem {
+  id: string; type: string; title: string; date: string; notes?: string | null;
+  university?: { id: string; name: string } | null;
+}
+
+function DeadlinesTab({ universities, deadlines, onChanged }: { universities?: UniversitySummary[]; deadlines?: DeadlineItem[]; onChanged: () => void }) {
+  const emptyForm = { universityId: '', type: 'ADMISSION_OPEN', title: '', date: '', notes: '' };
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean | null; text: string }>({ ok: null, text: '' });
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const startEdit = (d: DeadlineItem) => {
+    setEditingId(d.id);
+    setForm({
+      universityId: d.university?.id ?? '',
+      type: d.type,
+      title: d.title,
+      date: d.date?.slice(0, 10) ?? '',
+      notes: d.notes ?? '',
+    });
+    setMsg({ ok: null, text: '' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setMsg({ ok: null, text: '' });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await adminApi.createDeadline(form);
-      setMsg({ ok: true, text: 'Deadline added to the admission calendar.' });
-      setForm({ universityId: '', type: 'ADMISSION_OPEN', title: '', date: '', notes: '' });
+      if (editingId) {
+        await adminApi.updateDeadline(editingId, form);
+        setMsg({ ok: true, text: 'Deadline updated.' });
+        setEditingId(null);
+      } else {
+        await adminApi.createDeadline(form);
+        setMsg({ ok: true, text: 'Deadline added to the admission calendar.' });
+      }
+      setForm(emptyForm);
+      onChanged();
     } catch (err) {
-      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to create deadline.' });
+      setMsg({ ok: false, text: err instanceof Error ? err.message : 'Failed to save deadline.' });
     }
   };
 
+  const handleDelete = async (id: string, title: string) => {
+    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    await adminApi.deleteDeadline(id);
+    onChanged();
+  };
+
   return (
-    <Card className="p-6 sm:p-8 max-w-2xl">
-      <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2"><Plus className="h-4 w-4" /> Add Admission Calendar Event</h2>
-      <form onSubmit={handleCreate} className="space-y-4">
-        <Select label="University" required value={form.universityId} onChange={(e) => setForm({ ...form, universityId: e.target.value })}>
-          <option value="">Select a university</option>
-          {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </Select>
-        <Select label="Event Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-          {['ADMISSION_OPEN', 'ADMISSION_CLOSE', 'ENTRY_TEST', 'INTERVIEW', 'MERIT_LIST', 'SCHOLARSHIP_DEADLINE', 'CLASSES_START'].map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
-        </Select>
-        <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Undergraduate Admissions Open" />
-        <Input label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-        <Input label="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-        <FormMessage ok={msg.ok} text={msg.text} />
-        <Button type="submit" className="w-full">Add to Calendar</Button>
-      </form>
-    </Card>
+    <div className="space-y-8">
+      <Card className="p-6 sm:p-8 max-w-2xl">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <Plus className="h-4 w-4" /> {editingId ? 'Edit Admission Calendar Event' : 'Add Admission Calendar Event'}
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <Select label="University" required value={form.universityId} onChange={(e) => setForm({ ...form, universityId: e.target.value })}>
+            <option value="">Select a university</option>
+            {universities?.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </Select>
+          <Select label="Event Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+            {['ADMISSION_OPEN', 'ADMISSION_CLOSE', 'ENTRY_TEST', 'INTERVIEW', 'MERIT_LIST', 'SCHOLARSHIP_DEADLINE', 'CLASSES_START'].map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+          </Select>
+          <Input label="Title" required value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="e.g. Undergraduate Admissions Open" />
+          <Input label="Date" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+          <Input label="Notes (optional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+          <FormMessage ok={msg.ok} text={msg.text} />
+          <div className="flex gap-3">
+            <Button type="submit" className="w-full">{editingId ? 'Update Event' : 'Add to Calendar'}</Button>
+            {editingId && <Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button>}
+          </div>
+        </form>
+      </Card>
+
+      <Card className="p-6 sm:p-8">
+        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Calendar Events ({deadlines?.length ?? 0})</h2>
+        {!deadlines || deadlines.length === 0 ? (
+          <p className="text-sm text-muted">No calendar events yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {deadlines.map((d) => (
+              <div key={d.id} className="flex items-center justify-between gap-4 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="font-medium text-sm text-slate-900 dark:text-white">{d.title}</p>
+                  <p className="text-xs text-muted">
+                    {d.university?.name ?? 'Unknown university'} · {d.type.replace('_', ' ')} · {new Date(d.date).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" onClick={() => startEdit(d)}>Edit</Button>
+                  <button onClick={() => handleDelete(d.id, d.title)} className="text-slate-400 hover:text-rose-500 transition-colors p-2">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
   );
 }

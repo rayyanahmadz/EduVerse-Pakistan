@@ -38,7 +38,8 @@ export const adminApi = {
 
   createScholarship: (payload: unknown) => callFunction('admin', { body: { resource: 'scholarship', action: 'create', payload } }),
   createDeadline: (payload: unknown) => callFunction('admin', { body: { resource: 'deadline', action: 'create', payload } }),
-
+updateDeadline: (id: string, payload: unknown) => callFunction('admin', { body: { resource: 'deadline', action: 'update', id, payload } }),
+deleteDeadline: (id: string) => callFunction('admin', { body: { resource: 'deadline', action: 'delete', id } }),
   stats: () => callFunction<{ universities: number; degrees: number; scholarships: number; users: number; reviews: number }>('admin', {
     body: { resource: 'stats', action: 'read' },
   }),
