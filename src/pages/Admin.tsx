@@ -134,6 +134,7 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
   const emptyForm = {
     name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', email: '', phone: '',
     hecRanking: '', establishedYear: '', genderPolicy: 'CO_EDUCATION', hasHostel: false, hostelFeePerYear: '', description: '',
+    hasSportsComplex: false, hasWifi: true, hasTransport: false, societiesCount: '', campusSizeAcres: '',
   };
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -158,6 +159,11 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
       hasHostel: !!u.hasHostel,
       hostelFeePerYear: u.hostelFeePerYear != null ? String(u.hostelFeePerYear) : '',
       description: u.description ?? '',
+      hasSportsComplex: !!u.hasSportsComplex,
+      hasWifi: u.hasWifi !== false,
+      hasTransport: !!u.hasTransport,
+      societiesCount: u.societiesCount != null ? String(u.societiesCount) : '',
+      campusSizeAcres: u.campusSizeAcres != null ? String(u.campusSizeAcres) : '',
     });
     setMsg({ ok: null, text: '' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -177,6 +183,8 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
       hecRanking: form.hecRanking ? Number(form.hecRanking) : null,
       establishedYear: form.establishedYear ? Number(form.establishedYear) : null,
       hostelFeePerYear: form.hostelFeePerYear ? Number(form.hostelFeePerYear) : null,
+      societiesCount: form.societiesCount ? Number(form.societiesCount) : null,
+      campusSizeAcres: form.campusSizeAcres ? Number(form.campusSizeAcres) : null,
     };
     try {
       if (editingId) {
@@ -248,6 +256,24 @@ function UniversitiesTab({ universities, onChanged }: { universities?: Universit
           {form.hasHostel && (
             <Input label="Hostel Fee Per Year (Rs.)" type="number" value={form.hostelFeePerYear} onChange={(e) => setForm({ ...form, hostelFeePerYear: e.target.value })} />
           )}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="hasSportsComplex" checked={form.hasSportsComplex} onChange={(e) => setForm({ ...form, hasSportsComplex: e.target.checked })} className="h-4 w-4 rounded" />
+              <label htmlFor="hasSportsComplex" className="text-sm text-slate-700 dark:text-slate-300">Sports Complex</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="hasWifi" checked={form.hasWifi} onChange={(e) => setForm({ ...form, hasWifi: e.target.checked })} className="h-4 w-4 rounded" />
+              <label htmlFor="hasWifi" className="text-sm text-slate-700 dark:text-slate-300">WiFi</label>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="hasTransport" checked={form.hasTransport} onChange={(e) => setForm({ ...form, hasTransport: e.target.checked })} className="h-4 w-4 rounded" />
+              <label htmlFor="hasTransport" className="text-sm text-slate-700 dark:text-slate-300">Transport</label>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Input label="Societies Count" type="number" value={form.societiesCount} onChange={(e) => setForm({ ...form, societiesCount: e.target.value })} />
+            <Input label="Campus Size (Acres)" type="number" step="0.1" value={form.campusSizeAcres} onChange={(e) => setForm({ ...form, campusSizeAcres: e.target.value })} />
+          </div>
           <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <FormMessage ok={msg.ok} text={msg.text} />
           <div className="flex gap-3">
