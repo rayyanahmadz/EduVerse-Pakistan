@@ -34,14 +34,22 @@ export const adminApi = {
 
   createDegree: (payload: unknown) => callFunction('admin', { body: { resource: 'degree', action: 'create', payload } }),
   updateDegree: (id: string, payload: unknown) => callFunction('admin', { body: { resource: 'degree', action: 'update', id, payload } }),
+  uploadImage: (fileBase64: string, fileName: string, contentType: string, label?: string) =>
+  callFunction('admin', { body: { resource: 'upload', action: 'create', payload: { fileBase64, fileName, contentType, label } } }),
+addImageLink: (url: string, label: string) =>
+  callFunction('admin', { body: { resource: 'mediaAsset', action: 'create', payload: { url, label } } }),
+deleteImageAsset: (id: string) => callFunction('admin', { body: { resource: 'mediaAsset', action: 'delete', id } }),
   linkDegree: (payload: unknown) => callFunction('admin', { body: { resource: 'universityDegree', action: 'create', payload } }),
 unlinkDegree: (id: string) => callFunction('admin', { body: { resource: 'universityDegree', action: 'delete', id } }),
-  createScholarship: (payload: unknown) => callFunction('admin', { body: { resource: 'scholarship', action: 'create', payload } }),
+linkScholarship: (payload: unknown) => callFunction('admin', { body: { resource: 'universityScholarship', action: 'create', payload } }),
+unlinkScholarship: (id: string) => callFunction('admin', { body: { resource: 'universityScholarship', action: 'delete', id } }),
+createScholarship: (payload: unknown) => callFunction('admin', { body: { resource: 'scholarship', action: 'create', payload } }),
   createDeadline: (payload: unknown) => callFunction('admin', { body: { resource: 'deadline', action: 'create', payload } }),
 updateDeadline: (id: string, payload: unknown) => callFunction('admin', { body: { resource: 'deadline', action: 'update', id, payload } }),
 deleteDeadline: (id: string) => callFunction('admin', { body: { resource: 'deadline', action: 'delete', id } }),
   stats: () => callFunction<{ universities: number; degrees: number; scholarships: number; users: number; reviews: number }>('admin', {
     body: { resource: 'stats', action: 'read' },
+    
   }),
 };
 

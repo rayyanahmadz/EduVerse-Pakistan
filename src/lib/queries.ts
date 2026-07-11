@@ -47,6 +47,7 @@ export interface UniversityFilterParams {
 const UNIVERSITY_SELECT = `
   id, slug, name, shortName, sector, province, city, hecRanking, hasHostel, hostelFeePerYear,
   genderPolicy, website, email, phone, coverImageUrl,
+  hasSportsComplex, hasWifi, hasTransport, societiesCount, campusSizeAcres,
   UniversityDegree ( semesterFee, lastYearAggregate, Degree ( slug, title ) ),
   UniversityScholarship ( id ),
   Review ( teachingRating, campusRating, labsRating, internetRating, cafeteriaRating, sportsRating, securityRating )
@@ -113,6 +114,19 @@ export async function listUniversities(params: UniversityFilterParams = {}) {
   const paged = results.slice((page - 1) * pageSize, page * pageSize).map(({ _degreeSlugs, ...u }) => u);
 
   return { data: paged as UniversitySummary[], meta: { total, page, pageSize, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
+}
+export async function listUniversityScholarshipLinks() {
+  const { data, error } = await supabase
+    .from('UniversityScholarship')
+    .select('id, University ( name ), Scholarship ( name )')
+    .order('id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((l: any) => ({ id: l.id, universityName: l.University?.name, scholarshipName: l.Scholarship?.name }));
+}
+export async function listMediaAssets() {
+  const { data, error } = await supabase.from('MediaAsset').select('*').order('createdAt', { ascending: false });
+  if (error) throw new Error(error.message);
+  return data ?? [];
 }
 export async function listUniversitiesAdmin() {
   const { data, error } = await supabase.from('University').select('*').order('name', { ascending: true });

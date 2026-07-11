@@ -27,6 +27,49 @@ if ('error' in caller) {
 
   try {
     switch (resource) {
+     case 'upload': {
+  if (action === 'create') {
+    const { fileBase64, fileName, contentType, label } = payload;
+    if (!fileBase64 || !fileName) throw new Error('fileBase64 and fileName are required.');
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    if (buffer.length > 4 * 1024 * 1024) throw new Error('Image too large — please use a file under 4MB.');
+
+    const ext = fileName.split('.').pop() || 'jpg';
+    const path = `${Date.now()}-${slugify(fileName.replace(/\.[^.]+$/, ''))}.${ext}`;
+
+    const { error: uploadError } = await admin.storage
+      .from('university-images')
+      .upload(path, buffer, { contentType: contentType || 'image/jpeg', upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = admin.storage.from('university-images').getPublicUrl(path);
+
+    const { data: asset, error: insertError } = await admin
+      .from('MediaAsset')
+      .insert({ url: urlData.publicUrl, label: label || fileName })
+      .select()
+      .single();
+    if (insertError) throw insertError;
+
+    return res.status(201).json({ success: true, data: asset });
+  }
+  break;
+}
+
+case 'mediaAsset': {
+  if (action === 'create') {
+    const { data, error } = await admin.from('MediaAsset').insert(payload).select().single();
+    if (error) throw error;
+    return res.status(201).json({ success: true, data });
+  }
+  if (action === 'delete') {
+    const { error } = await admin.from('MediaAsset').delete().eq('id', id);
+    if (error) throw error;
+    return res.status(200).json({ success: true, data: null });
+  }
+  break;
+}
       case 'stats': {
         const [universities, degrees, scholarships, users, reviews] = await Promise.all([
           admin.from('University').select('id', { count: 'exact', head: true }),
@@ -96,6 +139,23 @@ if ('error' in caller) {
   }
   if (action === 'delete') {
     const { error } = await admin.from('UniversityDegree').delete().eq('id', id);
+    if (error) throw error;
+    return res.status(200).json({ success: true, data: null });
+  }
+  break;
+}
+case 'universityScholarship': {
+  if (action === 'create') {
+    const { data, error } = await admin
+      .from('UniversityScholarship')
+      .upsert(payload, { onConflict: 'universityId,scholarshipId' })
+      .select()
+      .single();
+    if (error) throw error;
+    return res.status(201).json({ success: true, data });
+  }
+  if (action === 'delete') {
+    const { error } = await admin.from('UniversityScholarship').delete().eq('id', id);
     if (error) throw error;
     return res.status(200).json({ success: true, data: null });
   }

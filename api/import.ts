@@ -180,6 +180,30 @@ async function normalizeUniversityDegree(raw: Record<string, any>): Promise<Norm
   };
 }
 // ---------------------------------------------------------------------------
+// UniversityScholarship — links an existing scholarship to an existing
+// university. Needs both FKs resolved.
+// ---------------------------------------------------------------------------
+async function normalizeUniversityScholarship(raw: Record<string, any>): Promise<NormalizeResult> {
+  const universityKey = raw.universitySlug || raw.universityName;
+  const scholarshipKey = raw.scholarshipSlug || raw.scholarshipName;
+  if (!universityKey) return { ok: false, reason: 'Missing required field "universitySlug" (or "universityName")' };
+  if (!scholarshipKey) return { ok: false, reason: 'Missing required field "scholarshipSlug" (or "scholarshipName")' };
+
+  let uQuery = admin.from('University').select('id').limit(1);
+  uQuery = raw.universitySlug ? uQuery.eq('slug', String(raw.universitySlug).trim()) : uQuery.ilike('name', String(raw.universityName).trim());
+  const { data: uni, error: uniError } = await uQuery.maybeSingle();
+  if (uniError) return { ok: false, reason: `University lookup failed: ${uniError.message}` };
+  if (!uni) return { ok: false, reason: `No university found matching "${universityKey}"` };
+
+  let sQuery = admin.from('Scholarship').select('id').limit(1);
+  sQuery = raw.scholarshipSlug ? sQuery.eq('slug', String(raw.scholarshipSlug).trim()) : sQuery.ilike('name', String(raw.scholarshipName).trim());
+  const { data: sch, error: schError } = await sQuery.maybeSingle();
+  if (schError) return { ok: false, reason: `Scholarship lookup failed: ${schError.message}` };
+  if (!sch) return { ok: false, reason: `No scholarship found matching "${scholarshipKey}"` };
+
+  return { ok: true, data: { universityId: uni.id, scholarshipId: sch.id } };
+}
+// ---------------------------------------------------------------------------
 // Deadline — needs a university lookup (slug or name) to resolve the FK
 // ---------------------------------------------------------------------------
 const VALID_DEADLINE_TYPES = ['ADMISSION_OPEN', 'ADMISSION_CLOSE', 'ENTRY_TEST', 'INTERVIEW', 'MERIT_LIST', 'SCHOLARSHIP_DEADLINE', 'CLASSES_START'];
@@ -223,6 +247,7 @@ const TABLES: Record<string, string> = {
   scholarship: 'Scholarship',
   deadline: 'Deadline',
   universityDegree: 'UniversityDegree',
+  universityScholarship: 'UniversityScholarship',
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -271,7 +296,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (resource === 'degree') normalized = normalizeDegree(rawRows[i]);
     else if (resource === 'scholarship') normalized = normalizeScholarship(rawRows[i]);
     else if (resource === 'deadline') normalized = await normalizeDeadline(rawRows[i]);
-    else normalized = await normalizeUniversityDegree(rawRows[i]);
+    else if (resource === 'universityDegree') normalized = await normalizeUniversityDegree(rawRows[i]);
+    else normalized = await normalizeUniversityScholarship(rawRows[i]);
     if (!normalized.ok) {
       skipped++;
       details.push({ row: rowNumber, status: 'skipped', reason: normalized.reason ?? 'Invalid row.' });
@@ -279,11 +305,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const table = TABLES[resource];
-    const needsSlug = resource !== 'deadline' && resource !== 'universityDegree';
+    const isLinkResource = resource === 'universityDegree' || resource === 'universityScholarship';
+    const needsSlug = resource !== 'deadline' && !isLinkResource;
     const insertData = needsSlug ? { ...normalized.data, slug: slugify(normalized.data.name ?? normalized.data.title) } : normalized.data;
 
     const { error } = resource === 'universityDegree'
       ? await admin.from(table).upsert(insertData, { onConflict: 'universityId,degreeId' })
+      : resource === 'universityScholarship'
+      ? await admin.from(table).upsert(insertData, { onConflict: 'universityId,scholarshipId' })
       : await admin.from(table).insert(insertData);
 
     if (error) {

@@ -370,6 +370,7 @@ create policy "Own applications only" on public."Application" for all using (aut
 drop policy if exists "Own notifications only" on public."Notification";
 create policy "Own notifications only" on public."Notification" for select using (auth.uid() = "userId");
 
+
 -- ============================================================================
 -- STORAGE (university logos / cover images / gallery)
 -- ============================================================================
