@@ -150,35 +150,96 @@ function normalizeScholarship(raw: Record<string, any>): NormalizeResult {
 async function normalizeUniversityDegree(raw: Record<string, any>): Promise<NormalizeResult> {
   const universityKey = raw.universitySlug || raw.universityName;
   const degreeKey = raw.degreeSlug || raw.degreeTitle;
-  if (!universityKey) return { ok: false, reason: 'Missing required field "universitySlug" (or "universityName")' };
-  if (!degreeKey) return { ok: false, reason: 'Missing required field "degreeSlug" (or "degreeTitle")' };
+
+  if (!universityKey) {
+    return {
+      ok: false,
+      reason: 'Missing required field "universitySlug" (or "universityName")',
+    };
+  }
+
+  if (!degreeKey) {
+    return {
+      ok: false,
+      reason: 'Missing required field "degreeSlug" (or "degreeTitle")',
+    };
+  }
 
   let uQuery = admin.from('University').select('id').limit(1);
-  uQuery = raw.universitySlug ? uQuery.eq('slug', String(raw.universitySlug).trim()) : uQuery.ilike('name', String(raw.universityName).trim());
+
+  uQuery = raw.universitySlug
+    ? uQuery.eq('slug', String(raw.universitySlug).trim())
+    : uQuery.ilike('name', String(raw.universityName).trim());
+
   const { data: uni, error: uniError } = await uQuery.maybeSingle();
-  if (uniError) return { ok: false, reason: `University lookup failed: ${uniError.message}` };
-  if (!uni) return { ok: false, reason: `No university found matching "${universityKey}"` };
+
+  if (uniError) {
+    return {
+      ok: false,
+      reason: `University lookup failed: ${uniError.message}`,
+    };
+  }
+
+  if (!uni) {
+    return {
+      ok: false,
+      reason: `No university found matching "${universityKey}"`,
+    };
+  }
 
   let dQuery = admin.from('Degree').select('id').limit(1);
-  dQuery = raw.degreeSlug ? dQuery.eq('slug', String(raw.degreeSlug).trim()) : dQuery.ilike('title', String(raw.degreeTitle).trim());
+
+  dQuery = raw.degreeSlug
+    ? dQuery.eq('slug', String(raw.degreeSlug).trim())
+    : dQuery.ilike('title', String(raw.degreeTitle).trim());
+
   const { data: deg, error: degError } = await dQuery.maybeSingle();
-  if (degError) return { ok: false, reason: `Degree lookup failed: ${degError.message}` };
-  if (!deg) return { ok: false, reason: `No degree found matching "${degreeKey}"` };
+
+  if (degError) {
+    return {
+      ok: false,
+      reason: `Degree lookup failed: ${degError.message}`,
+    };
+  }
+
+  if (!deg) {
+    return {
+      ok: false,
+      reason: `No degree found matching "${degreeKey}"`,
+    };
+  }
+
+  const data: Record<string, any> = {
+    universityId: uni.id,
+    degreeId: deg.id,
+  };
+
+  if (raw.semesterFee !== undefined)
+    data.semesterFee = Number(raw.semesterFee);
+
+  if (raw.totalFee !== undefined)
+    data.totalFee = Number(raw.totalFee);
+
+  if (raw.lastYearAggregate !== undefined)
+    data.lastYearAggregate = Number(raw.lastYearAggregate);
+
+  if (raw.seatsAvailable !== undefined)
+    data.seatsAvailable = Number(raw.seatsAvailable);
+
+  if (raw.entryTestRequired !== undefined)
+    data.entryTestRequired =
+      raw.entryTestRequired === true ||
+      String(raw.entryTestRequired).toLowerCase() === "true";
+
+  if (raw.entryTestName !== undefined)
+    data.entryTestName = raw.entryTestName;
 
   return {
     ok: true,
-    data: {
-      universityId: uni.id,
-      degreeId: deg.id,
-      semesterFee: raw.semesterFee ? Number(raw.semesterFee) : null,
-      totalFee: raw.totalFee ? Number(raw.totalFee) : null,
-      lastYearAggregate: raw.lastYearAggregate ? Number(raw.lastYearAggregate) : null,
-      seatsAvailable: raw.seatsAvailable ? Number(raw.seatsAvailable) : null,
-      entryTestRequired: raw.entryTestRequired === true || String(raw.entryTestRequired).toLowerCase() === 'true',
-      entryTestName: raw.entryTestName || null,
-    },
+    data,
   };
 }
+
 // ---------------------------------------------------------------------------
 // UniversityScholarship — links an existing scholarship to an existing
 // university. Needs both FKs resolved.
