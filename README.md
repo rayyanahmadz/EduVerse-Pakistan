@@ -1,116 +1,251 @@
-# EduVerse Pakistan
+# 🎓 EduVerse Pakistan
 
-**Pakistan's Complete University & Higher Education Platform** — Supabase + Vercel Serverless edition.
+**Pakistan's Complete Higher Education Platform**
 
-A full-stack, production-ready web app to search, compare, and get into Pakistani universities: a Smart University Finder, Merit Predictor, Degree Explorer, Scholarship Hub, Admission Calendar with reminders, a rule-based Career Advisor, a Fee Calculator, student reviews, a personal dashboard, and a full Admin Panel with CSV/JSON bulk import — all deployable on Vercel's free tier with **no traditional backend server**.
+A full-stack web app that helps students discover universities, compare programs, predict admission chances, find scholarships, and plan their academic journey — all in one place.
+
+Built with **React**, **TypeScript**, **Supabase**, **PostgreSQL**, and **Vercel Serverless Functions**.
+
+[![Deploy with Vercel] https://edu-verse-pakistan.vercel.app/
+
 
 ---
 
-## Architecture
+## Overview
 
-This is intentionally **not** an Express/Node backend. It follows a serverless-first design:
+Instead of browsing dozens of university websites, students can search, compare, and plan their higher education through one unified platform. EduVerse brings together university information, degree exploration, scholarships, admission tracking, career guidance, merit prediction, fee estimation, and student reviews in a single experience.
 
-| Layer | Technology | Where it runs |
-|---|---|---|
-| UI | React 18 + Vite + TypeScript + Tailwind CSS + Framer Motion + React Query | Static build, served by Vercel's CDN |
-| Data (reads & user-owned writes) | Supabase PostgreSQL, called **directly from the browser** via the Supabase JS SDK | Browser → Supabase, protected by Row Level Security |
-| Admin writes & bulk import | 3 Vercel Serverless Functions (`/api/admin`, `/api/import`, `/api/health`) | Vercel Edge Network, using the Supabase **service-role** key |
-| Auth | Supabase Auth (email/password) | Supabase |
+The app follows a **serverless-first architecture** — Supabase (PostgreSQL + Auth) handles the database, and Vercel Serverless Functions handle privileged operations. No dedicated backend server to maintain.
 
-**Why this is secure:** every table has Row Level Security enabled. Public catalog data (universities, degrees, scholarships) is readable by anyone but has **no write policy at all** for normal users — so even though the browser talks to Postgres directly, nobody can write to it from the client. The only way to write to the catalog is through the two serverless functions, which hold the service-role key (never sent to the browser) and re-check that the caller is a logged-in admin before doing anything. User-owned data (saved items, reviews, applications, reminders) is written directly from the browser, protected by RLS policies scoped to `auth.uid()`.
+---
+
+## ✨ Features
+
+| Feature | Description |
+|---|---|
+| 🎓 **University Explorer** | Search and filter universities by province, city, sector (public/private/women's), facilities, fees, merit, and rankings |
+| 📚 **Degree Explorer** | Browse programs with eligibility, duration, career paths, salary estimates, and offering universities |
+| 📈 **Merit Predictor** | Estimate admission chances from matric/intermediate/entry test scores, sorted into safe, moderate, and dream universities |
+| 🏛 **University Comparison** | Compare fees, merit, rankings, facilities, and programs side-by-side |
+| 💰 **Scholarship Hub** | Browse merit, need-based, government, provincial, university, and international scholarships |
+| 📅 **Admission Calendar** | Track application deadlines, entry tests, interviews, merit lists, and personal reminders |
+| 💵 **Fee Calculator** | Estimate total yearly cost including tuition, hostel, books, transport, and living expenses |
+| 🤖 **Career Advisor** | Rule-based recommendations from interests and academic strengths — no external AI API required |
+| ⭐ **Student Reviews** | Rate universities across teaching quality, campus life, facilities, and more |
+| ❤️ **Personal Dashboard** | Manage saved universities, degrees, scholarships, applications, and reminders |
+| 🛠 **Admin Dashboard** | Full CRUD over platform data, CSV/JSON bulk import, image library, and validation — all via secure server-side operations |
+
+---
+
+## 🏗 Architecture
 
 ```
+                     Browser
+                        │
+                        ▼
+            React + TypeScript + Vite
+                        │
+        ┌───────────────┴────────────────┐
+        ▼                                 ▼
+Supabase (Database)             Vercel Serverless APIs
+(PostgreSQL + Auth)             (/api/admin, /api/import)
+        │                                 │
+        └───────────────┬─────────────────┘
+                         ▼
+                Row Level Security
+```
+
+| Layer | Stack |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, React Query |
+| Backend | Supabase, PostgreSQL, Row Level Security |
+| Auth | Supabase Auth |
+| Serverless | Vercel Functions |
+| Deployment | Vercel |
+
+---
+
+## 🔒 Security
+
+- **Row Level Security (RLS)** — every table enforces policies so users only access data they're authorized to see or modify.
+- **Direct browser reads** — public data (universities, degrees, scholarships) is read straight from Supabase; regular users can't write to it, since no write policies exist for those tables.
+- **Secure administration** — the Service Role Key is never exposed to the client. All privileged actions run through Vercel Serverless Functions that verify authentication, confirm admin privileges, validate input, and return sanitized responses.
+
+---
+
+## 📂 Project Structure
+
+```text
 eduverse-pakistan/
-├── api/                        # Vercel Serverless Functions (3 total)
-│   ├── admin.ts                 # admin CRUD — universities, degrees, scholarships, deadlines, stats
-│   ├── import.ts                # CSV / JSON bulk university importer
-│   ├── health.ts                # health check
-│   └── _lib/supabaseAdmin.ts    # shared service-role client + admin-auth guard
+├── api/                 # Vercel serverless functions
+│   ├── admin.ts
+│   ├── import.ts
+│   ├── health.ts
+│   └── _lib/
 ├── src/
-│   ├── components/               # layout (Navbar, Footer) + ui (Button, Card, Input, ...)
-│   ├── context/                  # AuthContext (Supabase Auth), ThemeContext (dark/light)
+│   ├── components/
+│   ├── context/
+│   ├── hooks/
 │   ├── lib/
-│   │   ├── supabase.ts           # Supabase client (anon key, browser-safe)
-│   │   ├── queries.ts            # every direct-to-Supabase read/write used by pages
-│   │   ├── functions.ts          # typed wrapper for calling /api/admin and /api/import
-│   │   └── merit.ts              # aggregate/admission-chance calculation (client-side)
-│   ├── pages/                    # one file per route
-│   └── types/                    # shared TypeScript types
+│   ├── pages/
+│   ├── types/
+│   └── utils/
 ├── supabase/
-│   ├── schema.sql                # tables, indexes, RLS policies, storage bucket — run once
-│   └── seed.sql                  # 20 real HEC universities, degrees, scholarships, calendar
-├── vercel.json
+│   ├── schema.sql
+│   ├── seed.sql
+│   └── fix_grants.sql
+├── docs/
+│   ├── SUPABASE_SETUP.md
+│   ├── VERCEL_DEPLOYMENT.md
+│   └── GITHUB_SETUP.md
+├── public/
 ├── .env.example
-└── docs/
-    ├── SUPABASE_SETUP.md
-    ├── VERCEL_DEPLOYMENT.md
-    └── GITHUB_SETUP.md
+├── vercel.json
+└── package.json
 ```
 
 ---
 
-## Quick Start (local development)
+## 🚀 Getting Started
 
-### 1. Create a Supabase project and run the SQL
+### 1. Clone the repository
 
-Full walkthrough: [`docs/SUPABASE_SETUP.md`](./docs/SUPABASE_SETUP.md). Short version:
+```bash
+git clone https://github.com/your-username/eduverse-pakistan.git
+cd eduverse-pakistan
+```
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** → paste and run [`supabase/schema.sql`](./supabase/schema.sql).
-3. Paste and run [`supabase/seed.sql`](./supabase/seed.sql).
-4. Copy your **Project URL**, **anon public key**, and **service_role key** from **Project Settings → API**.
+### 2. Set up Supabase
 
-### 2. Configure environment variables
+Create a free project at [supabase.com](https://supabase.com), open the SQL Editor, and run:
+
+```
+supabase/schema.sql
+supabase/seed.sql
+```
+
+Then copy your **Project URL**, **Anon Key**, and **Service Role Key** from **Project Settings → API**.
+
+> **Tip:** If you ever see `permission denied for table...`, run `supabase/fix_grants.sql` to restore table permissions.
+
+### 3. Configure environment variables
 
 ```bash
 cp .env.example .env
 ```
-Fill in the four values from step 1.
 
-### 3. Install and run
+Fill in your Supabase credentials. The browser only uses `VITE_*` variables — private credentials are used exclusively by serverless functions.
+
+### 4. Install and run
 
 ```bash
 npm install
 npm run dev
 ```
-Open **http://localhost:5173**.
 
-> Serverless functions (`/api/*`) don't run under plain `npm run dev` (that's Vite only). To test the Admin Panel's write operations locally, install the Vercel CLI and run `vercel dev` instead — see `docs/VERCEL_DEPLOYMENT.md`. Everything else (browsing, search, merit predictor, saving items, reviews, applications) works fully under `npm run dev` since those talk to Supabase directly.
+Visit **http://localhost:5173**
 
-### 4. Create your admin account
+> **Note:** `npm run dev` only starts the Vite dev server. Serverless routes (`/api/*`) aren't executed by Vite — install the Vercel CLI and run `vercel dev` to test admin features (CRUD, bulk imports) locally. Everything else (auth, search, merit prediction, fee calculator, dashboards, reviews) works normally with `npm run dev` since it talks directly to Supabase.
 
-Register a normal account from `/register`, then in the Supabase SQL Editor run:
+---
+
+## 👨‍💼 Creating an Administrator Account
+
+After registering a normal account, open the Supabase SQL Editor and run:
+
 ```sql
-update public."Profile" set role = 'ADMIN' where email = 'you@example.com';
+update public."Profile"
+set role = 'ADMIN'
+where email = 'you@example.com';
 ```
-Log out and back in — you'll now see **Admin Panel** in the navbar.
+
+Sign out and back in — the **Admin Dashboard** will appear in the navigation bar.
 
 ---
 
-## Deploy to Vercel
+## ☁️ Deploying to Vercel
 
-Full walkthrough: [`docs/VERCEL_DEPLOYMENT.md`](./docs/VERCEL_DEPLOYMENT.md). Short version: import the GitHub repo into Vercel, set the same environment variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`), click Deploy. No other configuration needed — `vercel.json` already handles the SPA routing and the `/api` functions.
+1. **Push to GitHub**
+   ```bash
+   git add .
+   git commit -m "Initial commit"
+   git push origin main
+   ```
+2. **Import into Vercel** — create a new project and import the repo. Vercel auto-detects Vite and applies routing/functions via `vercel.json`.
+3. **Add environment variables** (Production, Preview, and Development):
 
-## Push to GitHub
+   | Variable | Description |
+   |---|---|
+   | `VITE_SUPABASE_URL` | Supabase project URL |
+   | `VITE_SUPABASE_ANON_KEY` | Public browser key |
+   | `SUPABASE_URL` | Server-side project URL |
+   | `SUPABASE_SERVICE_ROLE_KEY` | Private service role key |
 
-See [`docs/GITHUB_SETUP.md`](./docs/GITHUB_SETUP.md) for the exact commands.
+4. **Deploy**, then verify at `https://your-project.vercel.app/api/health` — you should see `{ "success": true }`.
 
 ---
 
-## Features
+## 📖 Documentation
 
-- **Smart University Finder** — filter by province, city, sector, gender policy, hostel; live admission-chance badges when marks are supplied.
-- **Merit Predictor** — Matric/Inter/entry-test aggregate calculation with Safe / Moderate / Dream matches, computed entirely client-side.
-- **University Compare** — up to 6 universities side-by-side.
-- **Degree Explorer** — overview, eligibility, careers, salary range, and every university offering each program.
-- **Scholarship Hub** — merit, need-based, provincial, government, private, international.
-- **Admission Calendar** — timeline of admission windows/tests/interviews/merit lists, with optional reminders (Supabase-backed, per user).
-- **AI Career Advisor** — short quiz, transparent rule-based scoring, no external AI API, nothing leaves the browser.
-- **Fee Calculator** — yearly cost estimate (tuition, hostel, books, transport, living).
-- **Student Reviews** — 7-category ratings per university, averaged automatically.
-- **Dashboard** — saved universities/degrees/scholarships, tracked applications, notifications.
-- **Admin Panel** — full CRUD for universities/degrees/scholarships/deadlines, plus CSV and JSON bulk importers, all running through the two secure serverless functions.
+| Document | Description |
+|---|---|
+| [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) | Complete database setup guide |
+| [`docs/VERCEL_DEPLOYMENT.md`](docs/VERCEL_DEPLOYMENT.md) | Deployment instructions |
+| [`docs/GITHUB_SETUP.md`](docs/GITHUB_SETUP.md) | GitHub repository setup |
 
-## A note on data accuracy
+---
 
-The seed data ships with **20 real, well-known HEC-recognized universities** (NUST, LUMS, GIKI, FAST-NUCES, UET Lahore, and more). Fee, merit, and ranking figures are reasonable planning estimates for demonstration, not verified official numbers. The schema and Admin Panel importer are built to scale to every HEC-recognized university — use the CSV/JSON importer to add the rest with verified data.
+## 📊 Data Accuracy
+
+EduVerse includes information on real **HEC-recognized universities** across Pakistan. Some values — tuition fees, merit percentages, salary estimates, rankings — are **illustrative estimates** meant to demonstrate platform functionality. Always verify fees, merit requirements, admission schedules, scholarships, and eligibility criteria directly with the official university before making decisions. The platform is built to scale through secure bulk imports, so illustrative data can be replaced with verified institutional data over time.
+
+---
+
+## 🎯 Roadmap
+
+- [ ] AI-powered university recommendations & admission guidance
+- [ ] University application assistant
+- [ ] Discussion forums & alumni network
+- [ ] Student messaging & university announcements
+- [ ] Internship and job portal integration
+- [ ] Mobile app with push notifications
+- [ ] Analytics dashboard
+- [ ] Multi-language support
+- [ ] Offline support (PWA)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome!
+
+```bash
+git checkout -b feature/new-feature
+git commit -m "Add new feature"
+git push origin feature/new-feature
+```
+
+Then open a Pull Request.
+
+---
+
+## ⭐ Support
+
+If this project helped you, consider starring the repo, forking it, reporting issues, or suggesting features — it all helps.
+
+---
+
+## 📄 License
+
+Built as a **production-ready portfolio project** demonstrating modern full-stack development with React, TypeScript, Supabase, PostgreSQL, and Vercel. Intended for educational, demonstration, and portfolio purposes.
+
+University information included is illustrative and should not be treated as official — always consult the respective institutions for current admission policies, fees, scholarships, and eligibility requirements.
+
+---
+
+<div align="center">
+
+**EduVerse Pakistan** — Helping students make smarter higher education decisions.
+Built with ❤️ using React, TypeScript, Supabase & Vercel.
+
+</div>
