@@ -134,9 +134,10 @@ export default function UniversityDetail() {
                     <div>
                       <div className="font-medium text-slate-900 dark:text-white">{offer.degree.title}</div>
                       <div className="text-xs text-muted mt-0.5">
-                        {offer.entryTestRequired ? `Entry Test: ${offer.entryTestName ?? 'Required'}` : 'No Entry Test Required'}
-                        {offer.lastYearAggregate && ` • Last year's merit: ${offer.lastYearAggregate}%`}
-                      </div>
+  {offer.entryTestRequired && `Entry Test: ${offer.entryTestName ?? 'Required'}`}
+  {offer.entryTestRequired && offer.lastYearAggregate && ' • '}
+  {offer.lastYearAggregate && `Last year's merit: ${offer.lastYearAggregate}%`}
+</div>
                     </div>
                     <div className="text-right">
                       <div className="font-semibold text-slate-900 dark:text-white">{formatCurrencyPKR(offer.semesterFee)}</div>
