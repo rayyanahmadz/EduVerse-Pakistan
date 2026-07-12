@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Building2, GraduationCap, Award, CalendarPlus, UploadCloud,
   Trash2, Plus, CheckCircle2, XCircle, Users, Star,
 } from 'lucide-react';
 import { adminApi, importApi } from '../lib/functions';
-import { listUniversities, listUniversitiesAdmin, listDegrees } from '../lib/queries';import { listDeadlines } from '../lib/queries';
+import { listUniversitiesAdmin, listDegrees, listDeadlines, listUniversityDegreeLinks, listMediaAssets } from '../lib/queries';
 import { UniversitySummary, Degree } from '../types';
 import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
@@ -14,8 +13,7 @@ import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { PAKISTAN_PROVINCES } from '../lib/constants';
-import { listUniversityDegreeLinks } from '../lib/queries';
-import { listMediaAssets } from '../lib/queries';
+
 interface AdminStats {
   universities: number;
   degrees: number;
@@ -44,7 +42,7 @@ export default function Admin() {
 
   const { data: universities } = useQuery({
     queryKey: ['universities-admin'],
-queryFn: () => listUniversitiesAdmin(),
+    queryFn: () => listUniversitiesAdmin(),
   });
   const { data: mediaAssets } = useQuery({ queryKey: ['media-admin'], queryFn: () => listMediaAssets() });
 
@@ -53,13 +51,13 @@ queryFn: () => listUniversitiesAdmin(),
     queryFn: () => listDegrees(),
   });
   const { data: links } = useQuery({
-  queryKey: ['links-admin'],
-  queryFn: () => listUniversityDegreeLinks(),
-});
+    queryKey: ['links-admin'],
+    queryFn: () => listUniversityDegreeLinks(),
+  });
   const { data: deadlines } = useQuery({
-  queryKey: ['deadlines-admin'],
-  queryFn: () => listDeadlines(),
-});
+    queryKey: ['deadlines-admin'],
+    queryFn: () => listDeadlines(),
+  });
 
   const refreshAll = () => {
     queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
@@ -67,9 +65,8 @@ queryFn: () => listUniversitiesAdmin(),
     queryClient.invalidateQueries({ queryKey: ['degrees-admin'] });
     queryClient.invalidateQueries({ queryKey: ['deadlines-admin'] });
     queryClient.invalidateQueries({ queryKey: ['links-admin'] });
-queryClient.invalidateQueries({ queryKey: ['media-admin'] });
+    queryClient.invalidateQueries({ queryKey: ['media-admin'] });
   };
-
 
   return (
     <div className="container-page py-10">
@@ -102,9 +99,12 @@ queryClient.invalidateQueries({ queryKey: ['media-admin'] });
         </div>
       )}
 
-{tab === 'universities' && <UniversitiesTab universities={universities} mediaAssets={mediaAssets} onChanged={refreshAll} />}      {tab === 'import' && <ImportTab onChanged={refreshAll} />}
-{tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} links={links} onChanged={refreshAll} />}      {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
-{tab === 'deadlines' && <DeadlinesTab universities={universities} deadlines={deadlines} onChanged={refreshAll} />}    </div>
+      {tab === 'universities' && <UniversitiesTab universities={universities} mediaAssets={mediaAssets} onChanged={refreshAll} />}
+      {tab === 'import' && <ImportTab onChanged={refreshAll} />}
+      {tab === 'degrees' && <DegreesTab degrees={degrees} universities={universities} links={links} onChanged={refreshAll} />}
+      {tab === 'scholarships' && <ScholarshipsTab universities={universities} />}
+      {tab === 'deadlines' && <DeadlinesTab universities={universities} deadlines={deadlines} onChanged={refreshAll} />}
+    </div>
   );
 }
 
@@ -130,7 +130,8 @@ function FormMessage({ ok, text }: { ok: boolean | null; text: string }) {
 }
 
 // ---------------- Universities Tab ----------------
-function UniversitiesTab({ universities, mediaAssets, onChanged }: { universities?: UniversitySummary[]; mediaAssets?: any[]; onChanged: () => void }) {  const emptyForm = {
+function UniversitiesTab({ universities, mediaAssets, onChanged }: { universities?: UniversitySummary[]; mediaAssets?: any[]; onChanged: () => void }) {
+  const emptyForm = {
     name: '', shortName: '', sector: 'PUBLIC', province: 'Punjab', city: '', website: '', email: '', phone: '',
     hecRanking: '', establishedYear: '', genderPolicy: 'CO_EDUCATION', hasHostel: false, hostelFeePerYear: '', description: '',
     hasSportsComplex: false, hasWifi: true, hasTransport: false, societiesCount: '', campusSizeAcres: '',
@@ -213,73 +214,109 @@ function UniversitiesTab({ universities, mediaAssets, onChanged }: { universitie
   const filtered = universities?.filter((u) => u.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-  <>
-    <div className="grid lg:grid-cols-2 gap-8">
-      <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-          <Plus className="h-4 w-4" /> {editingId ? 'Edit University' : 'Add University'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Your entire existing form remains unchanged */}
-        </form>
-      </Card>
-
-      <Card className="p-6 sm:p-8">
-        <h2 className="font-semibold text-slate-900 dark:text-white mb-4">
-          All Universities ({universities?.length ?? 0})
-        </h2>
-
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search..."
-          className="w-full mb-4 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-        />
-
-        <div className="space-y-2 max-h-[32rem] overflow-y-auto">
-          {filtered?.map((u) => (
-            <div
-              key={u.id}
-              className="flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 dark:border-slate-800"
-            >
-              <div>
-                <p className="text-sm font-medium text-slate-900 dark:text-white">
-                  {u.name}
-                </p>
-                <p className="text-xs text-muted">
-                  {u.city}, {u.province} • <Badge className="ml-1">{u.sector}</Badge>
-                </p>
+    <>
+      <div className="grid lg:grid-cols-2 gap-8">
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <Plus className="h-4 w-4" /> {editingId ? 'Edit University' : 'Add University'}
+          </h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Input label="Full Name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Input label="Short Name" value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} placeholder="e.g. NUST" />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Select label="Sector" value={form.sector} onChange={(e) => setForm({ ...form, sector: e.target.value })}>
+                <option value="PUBLIC">Public</option>
+                <option value="PRIVATE">Private</option>
+                <option value="SEMI_GOVERNMENT">Semi-Government</option>
+              </Select>
+              <Select label="Province" value={form.province} onChange={(e) => setForm({ ...form, province: e.target.value })}>
+                {PAKISTAN_PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="City" required value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+              <Input label="HEC Ranking" type="number" value={form.hecRanking} onChange={(e) => setForm({ ...form, hecRanking: e.target.value })} />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Established Year" type="number" value={form.establishedYear} onChange={(e) => setForm({ ...form, establishedYear: e.target.value })} />
+              <Select label="Gender Policy" value={form.genderPolicy} onChange={(e) => setForm({ ...form, genderPolicy: e.target.value })}>
+                <option value="CO_EDUCATION">Co-Education</option>
+                <option value="MALE_ONLY">Male Only</option>
+                <option value="FEMALE_ONLY">Female Only</option>
+              </Select>
+            </div>
+            <Input label="Website" type="url" value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://" />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="hasHostel" checked={form.hasHostel} onChange={(e) => setForm({ ...form, hasHostel: e.target.checked })} className="h-4 w-4 rounded" />
+              <label htmlFor="hasHostel" className="text-sm text-slate-700 dark:text-slate-300">Has Hostel</label>
+            </div>
+            {form.hasHostel && (
+              <Input label="Hostel Fee Per Year (Rs.)" type="number" value={form.hostelFeePerYear} onChange={(e) => setForm({ ...form, hostelFeePerYear: e.target.value })} />
+            )}
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="hasSportsComplex" checked={form.hasSportsComplex} onChange={(e) => setForm({ ...form, hasSportsComplex: e.target.checked })} className="h-4 w-4 rounded" />
+                <label htmlFor="hasSportsComplex" className="text-sm text-slate-700 dark:text-slate-300">Sports Complex</label>
               </div>
-
-              <div className="flex gap-2 shrink-0">
-                <Button variant="outline" onClick={() => startEdit(u)}>
-                  Edit
-                </Button>
-
-                <button
-                  onClick={() => handleDelete(u.id, u.name)}
-                  className="text-slate-400 hover:text-rose-500 transition-colors p-2"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="hasWifi" checked={form.hasWifi} onChange={(e) => setForm({ ...form, hasWifi: e.target.checked })} className="h-4 w-4 rounded" />
+                <label htmlFor="hasWifi" className="text-sm text-slate-700 dark:text-slate-300">WiFi</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="checkbox" id="hasTransport" checked={form.hasTransport} onChange={(e) => setForm({ ...form, hasTransport: e.target.checked })} className="h-4 w-4 rounded" />
+                <label htmlFor="hasTransport" className="text-sm text-slate-700 dark:text-slate-300">Transport</label>
               </div>
             </div>
-          ))}
-        </div>
-      </Card>
-    </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Input label="Societies Count" type="number" value={form.societiesCount} onChange={(e) => setForm({ ...form, societiesCount: e.target.value })} />
+              <Input label="Campus Size (Acres)" type="number" step="0.1" value={form.campusSizeAcres} onChange={(e) => setForm({ ...form, campusSizeAcres: e.target.value })} />
+            </div>
+            <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+            <FormMessage ok={msg.ok} text={msg.text} />
+            <div className="flex gap-3">
+              <Button type="submit" className="w-full" isLoading={submitting}>{editingId ? 'Update University' : 'Create University'}</Button>
+              {editingId && <Button type="button" variant="outline" onClick={cancelEdit}>Cancel</Button>}
+            </div>
+          </form>
+        </Card>
 
-    {/* 👇 Add this section */}
-    <div className="mt-8">
-      <ImageLibrary
-        assets={mediaAssets}
-        universities={universities}
-        onChanged={onChanged}
-      />
-    </div>
-  </>
-);
+        <Card className="p-6 sm:p-8">
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-4">All Universities ({universities?.length ?? 0})</h2>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search..."
+            className="w-full mb-4 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+          <div className="space-y-2 max-h-[32rem] overflow-y-auto">
+            {filtered?.map((u) => (
+              <div key={u.id} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-white">{u.name}</p>
+                  <p className="text-xs text-muted">{u.city}, {u.province} • <Badge className="ml-1">{u.sector}</Badge></p>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button variant="outline" onClick={() => startEdit(u)}>Edit</Button>
+                  <button onClick={() => handleDelete(u.id, u.name)} className="text-slate-400 hover:text-rose-500 transition-colors p-2">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="mt-8">
+        <ImageLibrary assets={mediaAssets} universities={universities} onChanged={onChanged} />
+      </div>
+    </>
+  );
+}
 
 // ---------------- Bulk Import Tab ----------------
 const IMPORT_FIELDS: Record<string, string> = {
@@ -288,7 +325,7 @@ const IMPORT_FIELDS: Record<string, string> = {
   scholarship: 'name,category,province,isInternational,benefits,eligibility,requiredDocuments,deadline,officialLink,description',
   deadline: 'universitySlug,type,title,date,notes',
   universityDegree: 'universitySlug,degreeSlug,semesterFee,totalFee,lastYearAggregate,seatsAvailable,entryTestRequired,entryTestName',
-universityScholarship: 'universitySlug,scholarshipSlug',
+  universityScholarship: 'universitySlug,scholarshipSlug',
 };
 
 const IMPORT_JSON_EXAMPLE: Record<string, string> = {
@@ -296,12 +333,12 @@ const IMPORT_JSON_EXAMPLE: Record<string, string> = {
   degree: '{\n  "rows": [\n    { "title": "BS Data Science", "level": "BACHELORS", "durationYears": 4, "skillsNeeded": "Python;SQL;Statistics" }\n  ]\n}',
   scholarship: '{\n  "rows": [\n    { "name": "Example Scholarship", "category": "MERIT" }\n  ]\n}',
   deadline: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "type": "ADMISSION_OPEN", "title": "Fall 2026 Admissions Open", "date": "2026-08-01" }\n  ]\n}',
-universityDegree: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "degreeSlug": "doctor-of-pharmacy-pharmd", "semesterFee": 85000, "lastYearAggregate": 72.5 }\n  ]\n}',
-universityScholarship: '{\n  "rows": [\n    { "universityName": "The University of Lahore", "scholarshipName": "HEC Need-Based Scholarship Program" }\n  ]\n}',
+  universityDegree: '{\n  "rows": [\n    { "universitySlug": "the-university-of-lahore", "degreeSlug": "doctor-of-pharmacy-pharmd", "semesterFee": 85000, "lastYearAggregate": 72.5 }\n  ]\n}',
+  universityScholarship: '{\n  "rows": [\n    { "universityName": "The University of Lahore", "scholarshipName": "HEC Need-Based Scholarship Program" }\n  ]\n}',
 };
 
 function ImportTab({ onChanged }: { onChanged: () => void }) {
-  const [resource, setResource] = useState<'university' | 'degree' | 'scholarship' | 'deadline'>('university');
+  const [resource, setResource] = useState<'university' | 'degree' | 'scholarship' | 'deadline' | 'universityDegree' | 'universityScholarship'>('university');
   const [file, setFile] = useState<File | null>(null);
   const [jsonText, setJsonText] = useState(IMPORT_JSON_EXAMPLE.university);
   const [csvResult, setCsvResult] = useState<any>(null);
@@ -310,7 +347,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
   const [loadingCsv, setLoadingCsv] = useState(false);
   const [loadingJson, setLoadingJson] = useState(false);
 
-  const changeResource = (r: 'university' | 'degree' | 'scholarship' | 'deadline') => {
+  const changeResource = (r: typeof resource) => {
     setResource(r);
     setJsonText(IMPORT_JSON_EXAMPLE[r]);
     setCsvResult(null);
@@ -358,7 +395,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
           <option value="scholarship">Scholarships</option>
           <option value="deadline">Admission Calendar Deadlines</option>
           <option value="universityDegree">Link Degrees to Universities (Fee + Merit)</option>
-       <option value="universityScholarship">Link Scholarships to Universities</option>
+          <option value="universityScholarship">Link Scholarships to Universities</option>
         </Select>
       </Card>
 
@@ -413,6 +450,7 @@ function ImportTab({ onChanged }: { onChanged: () => void }) {
     </div>
   );
 }
+
 // ---------------- Degrees Tab ----------------
 function DegreesTab({ degrees, universities, links, onChanged }: { degrees?: Degree[]; universities?: UniversitySummary[]; links?: any[]; onChanged: () => void }) {
   const emptyForm = { title: '', level: 'BACHELORS', durationYears: '4', overview: '', expectedSalaryMin: '', expectedSalaryMax: '' };
@@ -590,6 +628,7 @@ function DegreesTab({ degrees, universities, links, onChanged }: { degrees?: Deg
     </div>
   );
 }
+
 // ---------------- Scholarships Tab ----------------
 function ScholarshipsTab({ universities }: { universities?: UniversitySummary[] }) {
   const [form, setForm] = useState({ name: '', category: 'MERIT', province: '', benefits: '', eligibility: '', deadline: '', officialLink: '' });
@@ -741,6 +780,8 @@ function DeadlinesTab({ universities, deadlines, onChanged }: { universities?: U
     </div>
   );
 }
+
+// ---------------- Image Library ----------------
 function ImageLibrary({ assets, universities, onChanged }: { assets?: any[]; universities?: UniversitySummary[]; onChanged: () => void }) {
   const [linkUrl, setLinkUrl] = useState('');
   const [linkLabel, setLinkLabel] = useState('');
@@ -835,4 +876,4 @@ function ImageLibrary({ assets, universities, onChanged }: { assets?: any[]; uni
       )}
     </Card>
   );
-}}
+}
