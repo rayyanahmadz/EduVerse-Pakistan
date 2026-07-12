@@ -54,8 +54,8 @@ deleteDeadline: (id: string) => callFunction('admin', { body: { resource: 'deadl
 };
 
 export const importApi = {
- importJson: (resource: 'university' | 'degree' | 'scholarship' | 'deadline', rows: unknown[]) =>
+ importJson: (resource: 'university' | 'degree' | 'scholarship' | 'deadline' | 'universityDegree' | 'universityScholarship', rows: unknown[]) =>
   callFunction('import', { body: { resource, format: 'json', rows } }),
-importCsv: (resource: 'university' | 'degree' | 'scholarship' | 'deadline', csvText: string) =>
+importCsv: (resource: 'university' | 'degree' | 'scholarship' | 'deadline' | 'universityDegree' | 'universityScholarship', csvText: string) =>
   callFunction('import', { body: { resource, format: 'csv', csvText } }),
 };
